@@ -55,6 +55,9 @@ html {
 }
 
 .vn-record[aria-pressed='true']::before {
+  /* Static ring while recording; the breathing animation layers on top. Under reduced motion the
+     animation is cut to 0.01ms, so the static ring remains as the recording cue. */
+  opacity: 0.6;
   animation: vn-breathe var(--vn-dur-breath) ease-in-out infinite;
 }
 

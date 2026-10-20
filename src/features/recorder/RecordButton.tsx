@@ -19,7 +19,7 @@ export function RecordButton({
     <div className="flex flex-col items-center gap-3">
       <button
         type="button"
-        className="vn-record relative flex size-18 items-center justify-center rounded-full bg-accent text-accent-fg shadow-md focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-focus aria-disabled:opacity-50 aria-disabled:cursor-not-allowed"
+        className="vn-record relative flex size-18 items-center justify-center rounded-full bg-accent text-accent-fg shadow-md focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-focus transition-transform duration-(--vn-dur-fast) active:scale-95 aria-disabled:opacity-50 aria-disabled:cursor-not-allowed"
         aria-pressed={recording}
         aria-label={recording ? 'Stop recording' : 'Start recording'}
         aria-disabled={disabled || undefined}

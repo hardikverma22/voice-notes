@@ -119,6 +119,7 @@ export default function NoteEditor({ note }: { note: Note }) {
       </label>
       <input
         id="note-title"
+        placeholder="Untitled note"
         value={title}
         onChange={(event) => onTitleChange(event.target.value)}
         className="w-full bg-transparent font-serif text-2xl outline-none focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-focus"
