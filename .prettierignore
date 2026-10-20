@@ -7,3 +7,4 @@ package-lock.json
 tests/fixtures
 public/icons
 design-system
+.impeccable/

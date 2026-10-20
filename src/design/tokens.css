@@ -4,6 +4,7 @@
  */
 
 :root {
+  color-scheme: light;
   --vn-bg: #f5f3ee;
   --vn-surface: #fffefb;
   --vn-surface-2: #ece9e1;
@@ -41,6 +42,7 @@
 
 @media (prefers-color-scheme: dark) {
   :root:not([data-theme='light']) {
+    color-scheme: dark;
     --vn-bg: #0f1312;
     --vn-surface: #171c1a;
     --vn-surface-2: #212825;
@@ -64,6 +66,7 @@
 }
 
 :root[data-theme='dark'] {
+  color-scheme: dark;
   --vn-bg: #0f1312;
   --vn-surface: #171c1a;
   --vn-surface-2: #212825;
