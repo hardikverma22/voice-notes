@@ -10,3 +10,4 @@ tests/fixtures/*.wav
 
 # local tool config
 .claude/
+.impeccable/

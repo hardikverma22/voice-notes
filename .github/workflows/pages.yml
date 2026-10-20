@@ -23,7 +23,9 @@ jobs:
         with:
           node-version-file: .nvmrc
           cache: npm
-      - run: npm ci
+      # Skip install scripts: onnxruntime-node (a Node-only transitive dependency of
+      # transformers.js) downloads a native binary the browser build never uses.
+      - run: npm ci --ignore-scripts
       - run: npm run build
         env:
           PAGES_BASE: /voice-notes/

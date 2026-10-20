@@ -358,7 +358,9 @@ function SaveIndicator({ status }: { status: SaveStatus }) {
             className="inline-flex items-center gap-1.5"
           >
             <CheckIcon aria-hidden="true" weight="bold" className="size-3.5 text-success" />
-            Saved<span className="hidden sm:inline"> on this device</span>
+            <span>
+              Saved<span className="hidden sm:inline"> on this device</span>
+            </span>
           </m.span>
         )}
       </AnimatePresence>

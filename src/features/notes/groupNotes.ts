@@ -51,7 +51,11 @@ export function filterNotes(notes: Note[], query: string): Note[] {
 
 /** A short excerpt of the text around the first match, or the start of the text. */
 export function snippet(text: string, query: string, length = 140): string {
-  const clean = text.replace(/\s+/g, ' ').trim();
+  // Blocks (headings, list items) arrive on separate lines; join them readably.
+  const clean = text
+    .trim()
+    .replace(/([^\s.!?:;,])\s*\n+\s*/g, '$1 · ')
+    .replace(/\s+/g, ' ');
   const word = query.toLowerCase().split(/\s+/).find(Boolean);
   if (!word) return clean.slice(0, length);
   const at = clean.toLowerCase().indexOf(word);

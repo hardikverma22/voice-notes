@@ -72,3 +72,11 @@ describe('snippet', () => {
     expect(result).toContain('needle');
   });
 });
+
+describe('snippet block joins', () => {
+  it('separates blocks that do not end in punctuation', () => {
+    expect(snippet('Done.\n\nNext steps\nShip it\nTell the team', '')).toBe(
+      'Done. Next steps · Ship it · Tell the team',
+    );
+  });
+});
