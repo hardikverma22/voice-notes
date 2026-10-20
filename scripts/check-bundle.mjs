@@ -5,7 +5,7 @@ import { gzipSync } from 'node:zlib';
 const BUDGET_GZIP_KB = 150;
 const html = readFileSync('dist/index.html', 'utf8');
 const entry = html.match(
-  /<script type="module" crossorigin src="\/(assets\/index-[^"]+\.js)"/,
+  /<script type="module" crossorigin src="[^"]*?(assets\/index-[^"]+\.js)"/,
 )?.[1];
 if (!entry) {
   console.error('Entry chunk not found in dist/index.html');

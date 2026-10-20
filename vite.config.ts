@@ -3,7 +3,11 @@ import react from '@vitejs/plugin-react';
 import tailwindcss from '@tailwindcss/vite';
 import { VitePWA } from 'vite-plugin-pwa';
 
+// GitHub Pages serves a project site at /voice-notes/. Local dev, preview and e2e use /.
+const base = process.env.PAGES_BASE ?? '/';
+
 export default defineConfig({
+  base,
   plugins: [
     react(),
     tailwindcss(),
@@ -15,8 +19,8 @@ export default defineConfig({
         name: 'Voice Notes',
         short_name: 'Voice Notes',
         description: 'Private voice notes. Transcribed on your device.',
-        start_url: '/',
-        scope: '/',
+        start_url: base,
+        scope: base,
         display: 'standalone',
         background_color: '#f4f2ec',
         theme_color: '#f4f2ec',
