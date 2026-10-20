@@ -19,7 +19,7 @@ import { ModelProgressCard, ModelReadyLine } from '../features/transcribe/ModelI
 import { loadModel, useModel } from '../features/transcribe/modelStore';
 import { formatBytes } from '../lib/format';
 import { deleteAllNotes, exportBackup, importBackup } from '../storage/notes';
-import { LANGUAGES, setLanguage, useLanguage, type Language } from './settings';
+import { navigate } from './router';
 import { getTheme, setTheme, type Theme } from './theme';
 import { useStorageEstimate } from './useStorageEstimate';
 
@@ -72,27 +72,13 @@ function AppearanceSection() {
 }
 
 function TranscriptionSection() {
-  const language = useLanguage();
   const model = useModel();
   return (
     <Section title="Transcription">
-      <label className="flex flex-col gap-1.5 text-sm">
-        <span className="font-medium">Spoken language</span>
-        <select
-          value={language}
-          onChange={(event) => setLanguage(event.target.value as Language)}
-          className="min-h-11 rounded-md border border-border bg-surface px-3 text-[0.95rem] focus-visible:outline-2 focus-visible:outline-focus"
-        >
-          {LANGUAGES.map((item) => (
-            <option key={item.value} value={item.value}>
-              {item.label}
-            </option>
-          ))}
-        </select>
-        <span className="text-xs text-fg-muted">
-          Applies to new recordings and to “Transcribe again”.
-        </span>
-      </label>
+      <p className="text-sm text-fg-muted">
+        Transcription is tuned for English speech. Support for other languages needs a larger model
+        and is planned.
+      </p>
 
       <div className="flex flex-col gap-2 text-sm">
         <span className="font-medium">Speech model</span>
@@ -207,6 +193,7 @@ function DataSection({ open }: { open: boolean }) {
             void deleteAllNotes().then(() => {
               setConfirmDelete(false);
               setVersion((v) => v + 1);
+              navigate('/');
               toast.show({ message: 'All notes deleted' });
             });
           }}

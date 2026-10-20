@@ -1,6 +1,5 @@
-import { getLanguage } from '../../app/settings';
 import { createNote } from '../../storage/notes';
-import { MODEL_ID } from '../transcribe/config';
+import { LANGUAGE, MODEL_ID } from '../transcribe/config';
 import { transcriptToDoc } from './transcriptToDoc';
 
 /** Creates an empty typed note and returns its id. */
@@ -12,7 +11,7 @@ export async function createTextNote(): Promise<string> {
     segments: [],
     audioId: null,
     durationMs: 0,
-    language: getLanguage(),
+    language: LANGUAGE,
     modelId: MODEL_ID,
     device: 'wasm',
   });

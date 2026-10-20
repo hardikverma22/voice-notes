@@ -1,6 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import { navigate } from '../../app/router';
-import { getLanguage } from '../../app/settings';
 import { useToast } from '../../design/components/useToast';
 import { formatDate } from '../../lib/format';
 import {
@@ -12,7 +11,7 @@ import {
 import { createNote, setNoteAudio } from '../../storage/notes';
 import { titleFromTranscript } from '../notes/title';
 import { transcriptToDoc } from '../notes/transcriptToDoc';
-import { MODEL_ID } from '../transcribe/config';
+import { LANGUAGE, MODEL_ID } from '../transcribe/config';
 import { displayText } from '../transcribe/merge';
 import { getModelState, loadModel, transcribe } from '../transcribe/modelStore';
 import { enqueueTranscription, resumeUnfinished } from '../transcribe/transcriptionQueue';
@@ -56,7 +55,7 @@ export function RecordingProvider({ children }: { children: ReactNode }) {
           segments: [],
           audioId: null,
           durationMs: result.durationMs,
-          language: getLanguage(),
+          language: LANGUAGE,
           modelId: MODEL_ID,
           device: getModelState().device ?? 'wasm',
           status: 'queued',
@@ -184,7 +183,7 @@ function useRecoverOrphans() {
           segments: [],
           audioId: null,
           durationMs: 0,
-          language: getLanguage(),
+          language: LANGUAGE,
           modelId: MODEL_ID,
           device: 'wasm',
           status: 'queued',

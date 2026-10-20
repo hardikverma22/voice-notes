@@ -1,11 +1,10 @@
 import { useSyncExternalStore } from 'react';
-import { getLanguage } from '../../app/settings';
 import { getAudioForNote } from '../../storage/audio';
 import { applyTranscript, getNote, listUnfinishedNotes, setNoteStatus } from '../../storage/notes';
 import { titleFromTranscript } from '../notes/title';
 import { transcriptToDoc } from '../notes/transcriptToDoc';
 import { decodeToPcm16k } from '../recorder/decode';
-import { MODEL_ID, SAMPLE_RATE } from './config';
+import { LANGUAGE, MODEL_ID, SAMPLE_RATE } from './config';
 import { joinSegments } from './merge';
 import { getModelState, transcribe, whenModelReady } from './modelStore';
 
@@ -80,7 +79,7 @@ async function runOne(noteId: string): Promise<void> {
       plainText: text,
       segments: result.chunks,
       title: titleFromTranscript(text, note.createdAt),
-      language: getLanguage(),
+      language: LANGUAGE,
       modelId: MODEL_ID,
       device: getModelState().device ?? 'wasm',
       durationMs: Math.round((pcm.length / SAMPLE_RATE) * 1000),

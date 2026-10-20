@@ -37,9 +37,10 @@ import { useAudioPlayer } from './useAudioPlayer';
 type Tab = 'note' | 'transcript';
 
 export default function NotePage({ id }: { id: string }) {
-  const note = useLiveQuery(() => getNote(id), [id]);
+  // undefined while loading, null once we know the note is gone.
+  const note = useLiveQuery(async () => (await getNote(id)) ?? null, [id]);
   if (note === undefined) return <NoteSkeleton />;
-  if (note === null || !note) {
+  if (note === null) {
     return (
       <div className="mx-auto flex max-w-md flex-col items-center gap-4 px-4 py-24 text-center">
         <p className="font-serif text-2xl">This note no longer exists.</p>

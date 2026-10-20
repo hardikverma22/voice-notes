@@ -1,5 +1,5 @@
 import { useSyncExternalStore } from 'react';
-import { getLanguage } from '../../app/settings';
+import { LANGUAGE } from './config';
 import type { Device, FromWorker, TranscribeKind } from './protocol';
 import { getWhisperClient, type TranscribeResult } from './whisperClient';
 
@@ -115,8 +115,7 @@ export function useModel(): ModelState {
   );
 }
 
-/** Transcribes with the language chosen in settings. */
+/** Transcribes English speech. Other languages need a larger model (not offered yet). */
 export function transcribe(kind: TranscribeKind, audio: Float32Array): Promise<TranscribeResult> {
-  const language = getLanguage();
-  return getWhisperClient().transcribe(kind, audio, language === 'auto' ? null : language);
+  return getWhisperClient().transcribe(kind, audio, LANGUAGE);
 }

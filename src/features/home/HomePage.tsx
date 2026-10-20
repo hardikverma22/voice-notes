@@ -1,5 +1,6 @@
 import { useLiveQuery } from 'dexie-react-hooks';
 import { AnimatePresence, m } from 'motion/react';
+import { useEffect } from 'react';
 import { Button, IconButton } from '../../design/components/Button';
 import { Kbd } from '../../design/components/Kbd';
 import {
@@ -260,7 +261,11 @@ function Ambient({ recording }: { recording: boolean }) {
 }
 
 function SavedCard({ id, onDismiss }: { id: string; onDismiss: () => void }) {
-  const note = useLiveQuery(() => getNote(id), [id]);
+  const note = useLiveQuery(async () => (await getNote(id)) ?? null, [id]);
+  // The note was deleted (or everything was cleared): drop the stale card.
+  useEffect(() => {
+    if (note === null) onDismiss();
+  }, [note, onDismiss]);
   return (
     <m.div
       initial={{ opacity: 0, y: 12, scale: 0.98 }}
