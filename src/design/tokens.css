@@ -1,0 +1,81 @@
+/*
+ * Voice Notes design tokens. Contract: DESIGN.md and scripts/check-contrast.mjs.
+ * Structure is fixed: light values in :root, then dark values in two blocks that must match.
+ */
+
+:root {
+  --vn-bg: #f4f2ec;
+  --vn-surface: #fdfcf8;
+  --vn-fg: #1c2321;
+  --vn-fg-muted: #56615d;
+  --vn-border: #cfccc3;
+  --vn-control: #7a847f;
+  --vn-accent: #0f6b6a;
+  --vn-accent-fg: #ffffff;
+  --vn-danger: #b42318;
+  --vn-focus: #0f6b6a;
+
+  --vn-font-sans: ui-sans-serif, system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif;
+  --vn-font-serif: ui-serif, 'New York', 'Iowan Old Style', Georgia, serif;
+
+  --vn-text-xs: 0.75rem;
+  --vn-text-sm: 0.875rem;
+  --vn-text-base: 1rem;
+  --vn-text-lg: 1.125rem;
+  --vn-text-xl: 1.5rem;
+  --vn-text-2xl: 2rem;
+  --vn-leading-body: 1.55;
+
+  --vn-space-1: 0.25rem;
+  --vn-space-2: 0.5rem;
+  --vn-space-3: 0.75rem;
+  --vn-space-4: 1rem;
+  --vn-space-5: 1.25rem;
+  --vn-space-6: 1.5rem;
+  --vn-space-7: 2rem;
+  --vn-space-8: 2.5rem;
+
+  --vn-radius-sm: 0.5rem;
+  --vn-radius-md: 0.875rem;
+  --vn-radius-lg: 1.5rem;
+
+  --vn-dur-fast: 150ms;
+  --vn-dur-base: 220ms;
+  --vn-dur-breath: 2400ms;
+  --vn-ease: cubic-bezier(0.2, 0, 0, 1);
+
+  --vn-shadow-sm: 0 1px 2px rgb(20 35 30 / 0.08);
+  --vn-shadow-md: 0 6px 18px rgb(20 35 30 / 0.1);
+}
+
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme='light']) {
+    --vn-bg: #111513;
+    --vn-surface: #1a201d;
+    --vn-fg: #eef2ee;
+    --vn-fg-muted: #a9b4ae;
+    --vn-border: #323b36;
+    --vn-control: #7d8a84;
+    --vn-accent: #4fc4b8;
+    --vn-accent-fg: #111513;
+    --vn-danger: #ff8c7f;
+    --vn-focus: #4fc4b8;
+    --vn-shadow-sm: 0 1px 2px rgb(0 0 0 / 0.5);
+    --vn-shadow-md: 0 6px 18px rgb(0 0 0 / 0.55);
+  }
+}
+
+:root[data-theme='dark'] {
+  --vn-bg: #111513;
+  --vn-surface: #1a201d;
+  --vn-fg: #eef2ee;
+  --vn-fg-muted: #a9b4ae;
+  --vn-border: #323b36;
+  --vn-control: #7d8a84;
+  --vn-accent: #4fc4b8;
+  --vn-accent-fg: #111513;
+  --vn-danger: #ff8c7f;
+  --vn-focus: #4fc4b8;
+  --vn-shadow-sm: 0 1px 2px rgb(0 0 0 / 0.5);
+  --vn-shadow-md: 0 6px 18px rgb(0 0 0 / 0.55);
+}

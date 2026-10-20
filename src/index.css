@@ -1,0 +1,85 @@
+@import 'tailwindcss';
+@import './design/tokens.css';
+
+@custom-variant dark (&:where([data-theme='dark'], [data-theme='dark'] *));
+
+@theme inline {
+  --color-bg: var(--vn-bg);
+  --color-surface: var(--vn-surface);
+  --color-fg: var(--vn-fg);
+  --color-fg-muted: var(--vn-fg-muted);
+  --color-border: var(--vn-border);
+  --color-control: var(--vn-control);
+  --color-accent: var(--vn-accent);
+  --color-accent-fg: var(--vn-accent-fg);
+  --color-danger: var(--vn-danger);
+  --color-focus: var(--vn-focus);
+  --font-sans: var(--vn-font-sans);
+  --font-serif: var(--vn-font-serif);
+  --radius-sm: var(--vn-radius-sm);
+  --radius-md: var(--vn-radius-md);
+  --radius-lg: var(--vn-radius-lg);
+}
+
+html {
+  background: var(--vn-bg);
+  color: var(--vn-fg);
+  font-family: var(--vn-font-sans);
+}
+
+:focus-visible {
+  outline: 2px solid var(--vn-focus);
+  outline-offset: 2px;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+}
+
+/* Record button breathing ring: animates only while pressed (recording). */
+.vn-record::before {
+  content: '';
+  position: absolute;
+  inset: -0.625rem;
+  border-radius: 9999px;
+  border: 2px solid var(--vn-accent);
+  opacity: 0;
+  pointer-events: none;
+}
+
+.vn-record[aria-pressed='true']::before {
+  animation: vn-breathe var(--vn-dur-breath) ease-in-out infinite;
+}
+
+@keyframes vn-breathe {
+  0%,
+  100% {
+    transform: scale(1);
+    opacity: 0.25;
+  }
+  50% {
+    transform: scale(1.12);
+    opacity: 0.7;
+  }
+}
+
+/* Committed live text fades in (opacity only). */
+.vn-fade-in {
+  animation: vn-fade var(--vn-dur-base) var(--vn-ease);
+}
+
+@keyframes vn-fade {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
