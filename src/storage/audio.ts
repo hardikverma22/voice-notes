@@ -63,3 +63,7 @@ export async function estimateUsage(): Promise<{ usage: number; quota: number } 
   if (usage === undefined || quota === undefined) return null;
   return { usage, quota };
 }
+
+export function getAudioForNote(noteId: string, database = db): Promise<AudioRecord | undefined> {
+  return database.audio.where('noteId').equals(noteId).first();
+}

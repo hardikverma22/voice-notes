@@ -6,30 +6,65 @@
 @theme inline {
   --color-bg: var(--vn-bg);
   --color-surface: var(--vn-surface);
+  --color-surface-2: var(--vn-surface-2);
   --color-fg: var(--vn-fg);
   --color-fg-muted: var(--vn-fg-muted);
   --color-border: var(--vn-border);
   --color-control: var(--vn-control);
   --color-accent: var(--vn-accent);
   --color-accent-fg: var(--vn-accent-fg);
+  --color-accent-soft: var(--vn-accent-soft);
+  --color-record: var(--vn-record);
+  --color-record-fg: var(--vn-record-fg);
+  --color-success: var(--vn-success);
   --color-danger: var(--vn-danger);
   --color-focus: var(--vn-focus);
+  --color-highlight: var(--vn-highlight);
   --font-sans: var(--vn-font-sans);
   --font-serif: var(--vn-font-serif);
   --radius-sm: var(--vn-radius-sm);
   --radius-md: var(--vn-radius-md);
   --radius-lg: var(--vn-radius-lg);
+  --shadow-sm: var(--vn-shadow-sm);
+  --shadow-md: var(--vn-shadow-md);
+  --shadow-lg: var(--vn-shadow-lg);
 }
 
 html {
   background: var(--vn-bg);
   color: var(--vn-fg);
   font-family: var(--vn-font-sans);
+  font-feature-settings: 'cv11', 'ss01';
+  -webkit-font-smoothing: antialiased;
+  -webkit-tap-highlight-color: transparent;
+}
+
+body {
+  background: var(--vn-bg);
+}
+
+button,
+a,
+[role='button'] {
+  touch-action: manipulation;
+}
+
+button:not(:disabled),
+[role='button']:not([aria-disabled='true']) {
+  cursor: pointer;
 }
 
 :focus-visible {
   outline: 2px solid var(--vn-focus);
   outline-offset: 2px;
+}
+
+::selection {
+  background: color-mix(in srgb, var(--vn-accent) 28%, transparent);
+}
+
+.tabular {
+  font-variant-numeric: tabular-nums;
 }
 
 @media (prefers-reduced-motion: reduce) {
@@ -43,46 +78,149 @@ html {
   }
 }
 
-/* Record button breathing ring: animates only while pressed (recording). */
-.vn-record::before {
-  content: '';
-  position: absolute;
-  inset: -0.625rem;
-  border-radius: 9999px;
-  border: 2px solid var(--vn-accent);
-  opacity: 0;
-  pointer-events: none;
+/* Indeterminate shimmer for "transcribing" placeholders. */
+.vn-shimmer {
+  background: linear-gradient(
+    90deg,
+    var(--vn-surface-2) 0%,
+    color-mix(in srgb, var(--vn-surface-2) 40%, var(--vn-surface)) 50%,
+    var(--vn-surface-2) 100%
+  );
+  background-size: 200% 100%;
+  animation: vn-shimmer 1.6s linear infinite;
 }
 
-.vn-record[aria-pressed='true']::before {
-  /* Static ring while recording; the breathing animation layers on top. Under reduced motion the
-     animation is cut to 0.01ms, so the static ring remains as the recording cue. */
-  opacity: 0.6;
-  animation: vn-breathe var(--vn-dur-breath) ease-in-out infinite;
-}
-
-@keyframes vn-breathe {
-  0%,
-  100% {
-    transform: scale(1);
-    opacity: 0.25;
-  }
-  50% {
-    transform: scale(1.12);
-    opacity: 0.7;
-  }
-}
-
-/* Committed live text fades in (opacity only). */
-.vn-fade-in {
-  animation: vn-fade var(--vn-dur-base) var(--vn-ease);
-}
-
-@keyframes vn-fade {
+@keyframes vn-shimmer {
   from {
-    opacity: 0;
+    background-position: 200% 0;
   }
   to {
-    opacity: 1;
+    background-position: -200% 0;
   }
+}
+
+/* Thin custom scrollbars for panes. */
+.vn-scroll {
+  scrollbar-width: thin;
+  scrollbar-color: var(--vn-border) transparent;
+}
+
+/* ---------- Rich text (Tiptap) ---------- */
+.vn-prose {
+  line-height: var(--vn-leading-body);
+  font-size: 1.0625rem;
+  overflow-wrap: anywhere;
+}
+.vn-prose > * + * {
+  margin-top: 0.75em;
+}
+.vn-prose h1 {
+  font-family: var(--vn-font-serif);
+  font-size: 1.75rem;
+  line-height: 1.2;
+  font-weight: 600;
+  margin-top: 1.4em;
+}
+.vn-prose h2 {
+  font-family: var(--vn-font-serif);
+  font-size: 1.375rem;
+  line-height: 1.25;
+  font-weight: 600;
+  margin-top: 1.3em;
+}
+.vn-prose h3 {
+  font-size: 1.0625rem;
+  font-weight: 650;
+  margin-top: 1.2em;
+}
+.vn-prose > :first-child {
+  margin-top: 0;
+}
+.vn-prose ul {
+  list-style: disc;
+  padding-left: 1.4rem;
+}
+.vn-prose ol {
+  list-style: decimal;
+  padding-left: 1.4rem;
+}
+.vn-prose li + li {
+  margin-top: 0.25em;
+}
+.vn-prose li > p {
+  margin: 0;
+}
+.vn-prose blockquote {
+  border-left: 2px solid var(--vn-border);
+  padding-left: 1rem;
+  color: var(--vn-fg-muted);
+  font-style: italic;
+}
+.vn-prose code {
+  background: var(--vn-surface-2);
+  border-radius: 0.35rem;
+  padding: 0.1em 0.35em;
+  font-size: 0.9em;
+}
+.vn-prose pre {
+  background: var(--vn-surface-2);
+  border-radius: var(--vn-radius-sm);
+  padding: 0.85rem 1rem;
+  overflow-x: auto;
+}
+.vn-prose pre code {
+  background: none;
+  padding: 0;
+}
+.vn-prose mark {
+  background: var(--vn-highlight);
+  color: var(--vn-fg);
+  border-radius: 0.2rem;
+  padding: 0 0.1em;
+}
+.vn-prose a {
+  color: var(--vn-accent);
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}
+.vn-prose hr {
+  border: 0;
+  border-top: 1px solid var(--vn-border);
+  margin: 1.5em 0;
+}
+.vn-prose ul[data-type='taskList'] {
+  list-style: none;
+  padding-left: 0.15rem;
+}
+.vn-prose ul[data-type='taskList'] li {
+  display: flex;
+  gap: 0.6rem;
+  align-items: flex-start;
+}
+.vn-prose ul[data-type='taskList'] li > label {
+  flex: none;
+  margin-top: 0.3em;
+}
+.vn-prose ul[data-type='taskList'] li > div {
+  flex: 1;
+}
+.vn-prose ul[data-type='taskList'] input[type='checkbox'] {
+  width: 1.05rem;
+  height: 1.05rem;
+  accent-color: var(--vn-accent);
+  cursor: pointer;
+}
+.vn-prose ul[data-type='taskList'] li[data-checked='true'] > div {
+  color: var(--vn-fg-muted);
+  text-decoration: line-through;
+}
+.vn-prose p.is-editor-empty:first-child::before {
+  content: attr(data-placeholder);
+  float: left;
+  height: 0;
+  pointer-events: none;
+  color: var(--vn-fg-muted);
+}
+.vn-prose:focus-visible {
+  outline: none;
 }

@@ -26,35 +26,6 @@ for (const colorScheme of ['light', 'dark'] as const) {
   });
 }
 
-/** Computed animation duration of the record ring in milliseconds. */
-async function ringDurationMs(page: Page): Promise<number> {
-  const raw = await page
-    .getByRole('button', { name: 'Stop recording' })
-    .evaluate((el) => getComputedStyle(el, '::before').animationDuration);
-  const value = parseFloat(raw);
-  return raw.trim().endsWith('ms') ? value : value * 1000;
-}
-
-test('reduced motion stops the record ring animation', async ({ page }) => {
-  await page.emulateMedia({ reducedMotion: 'reduce' });
-  await page.goto('/');
-  await ensureModelReady(page);
-  await page.getByRole('button', { name: 'Start recording' }).click();
-  expect(await ringDurationMs(page)).toBeLessThanOrEqual(0.01);
-  await page.getByRole('button', { name: 'Stop recording' }).click();
-});
-
-test('the ring animates normally without reduced motion (control for the test above)', async ({
-  page,
-}) => {
-  await page.emulateMedia({ reducedMotion: 'no-preference' });
-  await page.goto('/');
-  await ensureModelReady(page);
-  await page.getByRole('button', { name: 'Start recording' }).click();
-  expect(await ringDurationMs(page)).toBeCloseTo(2400, -2);
-  await page.getByRole('button', { name: 'Stop recording' }).click();
-});
-
 test('phone width has no horizontal scroll and a large record button', async ({ page }) => {
   await page.setViewportSize({ width: 375, height: 812 });
   await page.goto('/');

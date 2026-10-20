@@ -16,7 +16,7 @@ test('home and note screens in light and dark', async ({ page }) => {
 
   await page.emulateMedia({ colorScheme: 'dark' });
   await page.reload();
-  await expect(page.getByText(/^Ready\. Running on/)).toBeVisible();
+  await ensureModelReady(page);
   await page.screenshot({ path: `${OUT}/home-dark.png`, fullPage: true });
 
   await seedNote(page);

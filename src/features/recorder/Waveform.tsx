@@ -1,87 +1,110 @@
 import { useEffect, useRef } from 'react';
 
-function readAccent(): string {
-  const value = getComputedStyle(document.documentElement).getPropertyValue('--vn-accent').trim();
-  // --vn-accent is always defined on :root (src/design/tokens.css), so no fallback literal is needed.
-  return value;
+function readToken(name: string): string {
+  return getComputedStyle(document.documentElement).getPropertyValue(name).trim();
 }
 
 function prefersReducedMotion(): boolean {
   return typeof matchMedia === 'function' && matchMedia('(prefers-reduced-motion: reduce)').matches;
 }
 
-/** Live audio level from an AnalyserNode. Reduced motion draws a level bar at most 4 times a second. */
-export function Waveform({ analyser }: { analyser: AnalyserNode | null }) {
+const BAR_WIDTH = 3;
+const BAR_GAP = 3;
+
+/**
+ * Scrolling level meter: one bar per ~70 ms, newest on the right. Paused input stops the scroll.
+ * Reduced motion updates four times a second.
+ */
+export function Waveform({
+  analyser,
+  paused = false,
+  tone = '--vn-accent',
+}: {
+  analyser: AnalyserNode | null;
+  paused?: boolean;
+  tone?: string;
+}) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
+  const pausedRef = useRef(paused);
+  useEffect(() => {
+    pausedRef.current = paused;
+  }, [paused]);
 
   useEffect(() => {
     const canvas = canvasRef.current;
-    if (!canvas || !analyser) return;
-    const context = canvas.getContext('2d');
-    if (!context) return;
+    const context = canvas?.getContext('2d');
+    if (!canvas || !context) return;
 
     const reduced = prefersReducedMotion();
-    const samples = new Uint8Array(analyser.fftSize);
+    const interval = reduced ? 250 : 70;
+    const samples = analyser ? new Uint8Array(analyser.fftSize) : null;
+    const history: number[] = [];
     let frame = 0;
-    let lastDraw = 0;
+    let lastPush = 0;
+    let dpr = 1;
 
     const resize = () => {
-      const dpr = window.devicePixelRatio || 1;
+      dpr = window.devicePixelRatio || 1;
       const rect = canvas.getBoundingClientRect();
       canvas.width = Math.max(1, Math.round(rect.width * dpr));
       canvas.height = Math.max(1, Math.round(rect.height * dpr));
     };
     resize();
-    window.addEventListener('resize', resize);
+    const observer = new ResizeObserver(resize);
+    observer.observe(canvas);
+
+    const color = readToken(tone);
+    const idle = readToken('--vn-border');
 
     const draw = (now: number) => {
       frame = requestAnimationFrame(draw);
-      if (reduced && now - lastDraw < 250) return;
-      lastDraw = now;
-
-      analyser.getByteTimeDomainData(samples);
       const { width, height } = canvas;
-      const mid = height / 2;
-      context.clearRect(0, 0, width, height);
-      context.strokeStyle = readAccent();
-      context.fillStyle = context.strokeStyle;
-      context.lineWidth = Math.max(2, Math.round(height / 40));
+      const step = (BAR_WIDTH + BAR_GAP) * dpr;
+      const capacity = Math.ceil(width / step);
 
-      if (reduced) {
+      if (analyser && samples && !pausedRef.current && now - lastPush >= interval) {
+        lastPush = now;
+        analyser.getByteTimeDomainData(samples);
         let sum = 0;
         for (const value of samples) {
           const v = (value - 128) / 128;
           sum += v * v;
         }
-        const rms = Math.sqrt(sum / samples.length);
-        const barHeight = Math.max(2, rms * height);
-        context.fillRect(width / 2 - 20, mid - barHeight / 2, 40, barHeight);
-        return;
+        history.push(Math.min(1, Math.sqrt(sum / samples.length) * 5));
+        if (history.length > capacity) history.splice(0, history.length - capacity);
+      } else if (!analyser && history.length > 0) {
+        history.length = 0;
       }
 
-      context.beginPath();
-      const step = width / samples.length;
-      for (let i = 0; i < samples.length; i++) {
-        const y = mid + (((samples[i] ?? 128) - 128) / 128) * (height * 0.45);
-        if (i === 0) context.moveTo(0, y);
-        else context.lineTo(i * step, y);
+      context.clearRect(0, 0, width, height);
+      const mid = height / 2;
+      const barWidth = BAR_WIDTH * dpr;
+      for (let i = 0; i < capacity; i++) {
+        const value = history[history.length - capacity + i];
+        const x = i * step;
+        if (value === undefined) {
+          context.fillStyle = idle;
+          context.fillRect(x, mid - dpr, barWidth, 2 * dpr);
+          continue;
+        }
+        const h = Math.max(2 * dpr, value * (height - 4 * dpr));
+        context.fillStyle = color;
+        context.globalAlpha = 0.35 + 0.65 * (i / capacity);
+        context.beginPath();
+        context.roundRect(x, mid - h / 2, barWidth, h, barWidth / 2);
+        context.fill();
+        context.globalAlpha = 1;
       }
-      context.stroke();
     };
 
     frame = requestAnimationFrame(draw);
     return () => {
       cancelAnimationFrame(frame);
-      window.removeEventListener('resize', resize);
+      observer.disconnect();
     };
-  }, [analyser]);
+  }, [analyser, tone]);
 
   return (
-    <canvas
-      ref={canvasRef}
-      role="img"
-      aria-label="Live audio level"
-      className="h-24 w-full rounded-md bg-surface"
-    />
+    <canvas ref={canvasRef} role="img" aria-label="Live audio level" className="h-16 w-full" />
   );
 }

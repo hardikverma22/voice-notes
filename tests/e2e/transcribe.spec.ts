@@ -1,21 +1,25 @@
 import { existsSync } from 'node:fs';
 import { expect, test } from '@playwright/test';
-import { ensureModelReady } from './helpers';
+import { modelChip, stopAndOpenNote } from './helpers';
 
 test.describe('transcription', () => {
   test.skip(!existsSync('tests/fixtures/speech.wav'), 'needs macOS say to generate speech.wav');
 
-  test('shows live text while recording and a final transcript after stop', async ({ page }) => {
+  test('first recording downloads the model with progress, then transcribes', async ({ page }) => {
     await page.goto('/');
-    await ensureModelReady(page);
+    await expect(modelChip(page)).toHaveAttribute('aria-label', /not downloaded/, {
+      timeout: 30_000,
+    });
     await page.getByRole('button', { name: 'Start recording' }).click();
+    await expect(page.getByRole('progressbar', { name: 'Speech model download' })).toBeVisible();
 
     const live = page.getByRole('region', { name: 'Live transcript' });
-    await expect(live).toContainText(/fox/i, { timeout: 30_000 });
+    await expect(live).toContainText(/fox/i, { timeout: 150_000 });
 
-    await page.getByRole('button', { name: 'Stop recording' }).click();
-    const transcript = page.getByRole('region', { name: 'Transcript', exact: true });
-    await expect(transcript).toContainText(/quick brown fox/i, { timeout: 120_000 });
-    await expect(transcript).toContainText(/lazy dog/i);
+    await stopAndOpenNote(page);
+    const editor = page.getByRole('textbox', { name: 'Note text' });
+    await expect(editor).toContainText(/quick brown fox/i, { timeout: 120_000 });
+    await expect(editor).toContainText(/lazy dog/i);
+    await expect(page.getByRole('tab', { name: 'Timestamps' })).toBeVisible();
   });
 });
