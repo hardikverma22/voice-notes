@@ -13,7 +13,7 @@ browser's storage.
 [**Open the app →**](https://hardikverma22.github.io/voice-notes/)
 
 [![Deploy](https://github.com/hardikverma22/voice-notes/actions/workflows/pages.yml/badge.svg)](https://github.com/hardikverma22/voice-notes/actions/workflows/pages.yml)
-![License: MIT](https://img.shields.io/badge/license-MIT-0d6463)
+[![License: MIT](https://img.shields.io/badge/license-MIT-0d6463)](LICENSE)
 ![PWA](https://img.shields.io/badge/PWA-installable%20%26%20offline-0d6463)
 ![Whisper](https://img.shields.io/badge/speech-Whisper%20on--device-0d6463)
 ![React 19](https://img.shields.io/badge/React-19-0d6463)
@@ -347,4 +347,4 @@ idea of private, on-device dictation comes from it. Speech recognition is
 
 ## License
 
-MIT, as declared in [`package.json`](package.json).
+[MIT](LICENSE) © 2026 Hardik Verma
