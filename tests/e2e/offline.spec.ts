@@ -1,5 +1,5 @@
 import { expect, test } from '@playwright/test';
-import { ensureModelReady } from './helpers';
+import { ensureModelReady, modelChip, sidebarNotes, stopAndOpenNote } from './helpers';
 
 test('works offline after the first run and reports installability', async ({ page, context }) => {
   await page.goto('/');
@@ -9,18 +9,17 @@ test('works offline after the first run and reports installability', async ({ pa
 
   await context.setOffline(true);
   await page.reload();
-  await expect(page.getByRole('heading', { name: 'Voice Notes', level: 1 })).toBeVisible();
-  await expect(page.getByText(/^Ready\. Running on/)).toBeVisible({ timeout: 60_000 });
+  await expect(page.getByRole('button', { name: 'Start recording' })).toBeVisible();
+  await expect(modelChip(page)).toHaveAttribute('aria-label', /On-device/, { timeout: 60_000 });
   await expect(page.getByRole('status').filter({ hasText: 'Offline' })).toBeVisible();
 
   await page.getByRole('button', { name: 'Start recording' }).click();
   await page.waitForTimeout(4000);
-  await page.getByRole('button', { name: 'Stop recording' }).click();
-  await expect(page).toHaveURL(/#\/note\//, { timeout: 120_000 });
-  await expect(page.getByRole('region', { name: 'Transcript', exact: true })).toContainText(/fox/i);
-
-  await page.goto('/');
-  await expect(page.getByRole('list', { name: 'Notes' }).getByRole('link')).toHaveCount(1);
+  await stopAndOpenNote(page);
+  await expect(page.getByRole('textbox', { name: 'Note text' })).toContainText(/fox/i, {
+    timeout: 120_000,
+  });
+  await expect(sidebarNotes(page)).toHaveCount(1);
   await context.setOffline(false);
 });
 

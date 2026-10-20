@@ -1,8 +1,8 @@
 import { expect, test } from '@playwright/test';
-import { ensureModelReady } from './helpers';
+import { ensureModelReady, sidebarNotes } from './helpers';
 
 test.describe('recorder', () => {
-  test('records, draws the waveform, and plays the clip back', async ({ page }) => {
+  test('records, draws the waveform, and saves a note with audio', async ({ page }) => {
     const consoleErrors: string[] = [];
     page.on('console', (msg) => {
       if (msg.type() === 'error') consoleErrors.push(msg.text());
@@ -11,12 +11,13 @@ test.describe('recorder', () => {
     await page.goto('/');
     await ensureModelReady(page);
     await page.getByRole('button', { name: 'Start recording' }).click();
+    await expect(page.getByText('Recording', { exact: true }).first()).toBeVisible();
     await page.waitForTimeout(3000);
 
-    const hasPixels = await page.evaluate(() => {
-      const canvas = document.querySelector('canvas');
-      const context = canvas?.getContext('2d');
-      if (!canvas || !context) return false;
+    const hasPixels = await page.getByRole('img', { name: 'Live audio level' }).evaluate((el) => {
+      const canvas = el as HTMLCanvasElement;
+      const context = canvas.getContext('2d');
+      if (!context) return false;
       const data = context.getImageData(0, 0, canvas.width, canvas.height).data;
       for (let i = 3; i < data.length; i += 4) {
         if ((data[i] ?? 0) > 0) return true;
@@ -26,29 +27,34 @@ test.describe('recorder', () => {
     expect(hasPixels).toBe(true);
 
     await page.getByRole('button', { name: 'Stop recording' }).click();
-    const audio = page.getByRole('region', { name: 'Last recording' }).or(page.locator('audio'));
-    await expect(audio.first()).toBeVisible();
-    const duration = await page
-      .locator('audio')
-      .first()
-      .evaluate(async (el: HTMLAudioElement) => {
-        if (el.readyState < 1) {
-          await new Promise((resolve) =>
-            el.addEventListener('loadedmetadata', resolve, { once: true }),
-          );
-        }
-        if (el.duration === Infinity) {
-          el.currentTime = 1e9;
-          await new Promise((resolve) =>
-            el.addEventListener('timeupdate', resolve, { once: true }),
-          );
-          el.currentTime = 0;
-        }
-        return el.duration;
-      });
-    expect(duration === Infinity || duration > 2).toBe(true);
-
+    await expect(page.getByText('Saved to your notes').first()).toBeVisible();
+    await expect(sidebarNotes(page)).toHaveCount(1);
     expect(consoleErrors).toEqual([]);
+  });
+
+  test('pause stops the clock and resume continues it', async ({ page }) => {
+    await page.goto('/');
+    await ensureModelReady(page);
+    await page.getByRole('button', { name: 'Start recording' }).click();
+    await page.waitForTimeout(1500);
+    await page.getByRole('button', { name: 'Pause recording' }).click();
+    await expect(page.getByText('Paused', { exact: true }).first()).toBeVisible();
+    const clock = page.getByLabel(/^Elapsed /);
+    const before = await clock.getAttribute('aria-label');
+    await page.waitForTimeout(1500);
+    expect(await clock.getAttribute('aria-label')).toBe(before);
+    await page.getByRole('button', { name: 'Resume recording' }).click();
+    await expect(page.getByText('Recording', { exact: true }).first()).toBeVisible();
+  });
+
+  test('discard throws the recording away', async ({ page }) => {
+    await page.goto('/');
+    await ensureModelReady(page);
+    await page.getByRole('button', { name: 'Start recording' }).click();
+    await page.waitForTimeout(1500);
+    await page.getByRole('button', { name: 'Discard recording' }).click();
+    await expect(page.getByText('Recording discarded')).toBeVisible();
+    await expect(sidebarNotes(page)).toHaveCount(0);
   });
 
   test('Space toggles recording exactly once with focus on the page body', async ({ page }) => {
@@ -57,8 +63,21 @@ test.describe('recorder', () => {
     await page.evaluate(() => (document.activeElement as HTMLElement | null)?.blur());
     await page.keyboard.press('Space');
     await expect(page.getByRole('button', { name: 'Stop recording' })).toBeVisible();
+    await page.waitForTimeout(1000);
     await page.keyboard.press('Space');
+    await expect(page.getByText('Saved to your notes').first()).toBeVisible();
+  });
+
+  test('keeps recording while browsing notes, with a floating stop control', async ({ page }) => {
+    await page.goto('/');
+    await ensureModelReady(page);
+    await page.getByRole('button', { name: 'Start recording' }).click();
+    await page.getByRole('button', { name: 'Text note' }).first().click();
     await expect(page).toHaveURL(/#\/note\//);
+    await page.waitForTimeout(1500);
+    await page.getByRole('button', { name: 'Stop and save recording' }).click();
+    await expect(page.getByText('Saved to your notes').first()).toBeVisible();
+    await expect(sidebarNotes(page)).toHaveCount(2);
   });
 
   test('shows the permission message when the microphone is denied', async ({ page }) => {
@@ -67,7 +86,6 @@ test.describe('recorder', () => {
         Promise.reject(new DOMException('Denied', 'NotAllowedError'));
     });
     await page.goto('/');
-    await ensureModelReady(page);
     await page.getByRole('button', { name: 'Start recording' }).click();
     await expect(page.getByRole('alert')).toContainText('Microphone access is blocked');
     await expect(page.getByRole('button', { name: 'Start recording' })).toBeVisible();

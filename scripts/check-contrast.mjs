@@ -31,6 +31,13 @@ const PAIRS = [
   ['--vn-focus', '--vn-bg', 3],
   ['--vn-border', '--vn-bg', 1.3],
   ['--vn-control', '--vn-bg', 3],
+  ['--vn-record-fg', '--vn-record', 4.5],
+  ['--vn-record', '--vn-bg', 3],
+  ['--vn-success', '--vn-surface', 4.5],
+  ['--vn-fg', '--vn-highlight', 4.5],
+  ['--vn-fg', '--vn-surface-2', 4.5],
+  ['--vn-fg-muted', '--vn-surface-2', 4.5],
+  ['--vn-accent', '--vn-accent-soft', 4.5],
 ];
 let failed = false;
 const darkMedia = block(":root:not([data-theme='light'])");

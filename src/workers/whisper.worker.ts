@@ -17,7 +17,7 @@ import type {
   TranscribeKind,
 } from '../features/transcribe/protocol';
 
-// This file is the only importer of @huggingface/transformers (see PLAN.md, Do NOT #4).
+// This file is the only importer of @huggingface/transformers; keep it out of the main bundle.
 env.allowLocalModels = false;
 
 interface AsrChunk {
@@ -124,15 +124,22 @@ function ensureLoaded(): Promise<Asr> {
 // Transcription queue: at most one job runs at a time. A new live request replaces a queued
 // live request. Final requests are never dropped and run before queued live requests.
 let busy = false;
-let queuedLive: { id: number; audio: Float32Array } | null = null;
-const queuedFinal: { id: number; audio: Float32Array }[] = [];
+let queuedLive: Job | null = null;
+const queuedFinal: Job[] = [];
 
-async function runJob(id: number, kind: TranscribeKind, audio: Float32Array): Promise<void> {
+interface Job {
+  id: number;
+  kind: TranscribeKind;
+  audio: Float32Array;
+  language: string | null;
+}
+
+async function runJob({ id, kind, audio, language }: Job): Promise<void> {
   const started = performance.now();
   try {
     const asr = await ensureLoaded();
     const output = (await asr(audio, {
-      language: LANGUAGE,
+      ...(language ? { language } : {}),
       task: 'transcribe',
       return_timestamps: true,
       ...(kind === 'final'
@@ -157,32 +164,29 @@ async function runJob(id: number, kind: TranscribeKind, audio: Float32Array): Pr
 
 async function pump(): Promise<void> {
   if (busy) return;
-  let job: { id: number; kind: TranscribeKind; audio: Float32Array } | undefined;
-  const final = queuedFinal.shift();
-  if (final) {
-    job = { ...final, kind: 'final' };
-  } else if (queuedLive) {
-    job = { ...queuedLive, kind: 'live' };
+  let job: Job | undefined = queuedFinal.shift();
+  if (!job && queuedLive) {
+    job = queuedLive;
     queuedLive = null;
   }
   if (!job) return;
   busy = true;
   try {
-    await runJob(job.id, job.kind, job.audio);
+    await runJob(job);
   } finally {
     busy = false;
     void pump();
   }
 }
 
-function enqueue(kind: TranscribeKind, id: number, audio: Float32Array): void {
-  if (kind === 'final') {
-    queuedFinal.push({ id, audio });
+function enqueue(job: Job): void {
+  if (job.kind === 'final') {
+    queuedFinal.push(job);
   } else {
     if (queuedLive) {
       post({ type: 'error', id: queuedLive.id, stage: 'transcribe', message: 'superseded' });
     }
-    queuedLive = { id, audio };
+    queuedLive = job;
   }
   void pump();
 }
@@ -229,7 +233,12 @@ self.onmessage = (event: MessageEvent<ToWorker>) => {
         );
       break;
     case 'transcribe':
-      enqueue(message.kind, message.id, message.audio);
+      enqueue({
+        id: message.id,
+        kind: message.kind,
+        audio: message.audio,
+        language: message.language,
+      });
       break;
   }
 };

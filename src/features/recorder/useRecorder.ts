@@ -3,7 +3,7 @@ import { MAX_RECORDING_SEC, SAMPLE_RATE } from '../transcribe/config';
 import { PcmBuffer } from './pcmBuffer';
 import { RecorderError, startRecording, type RecordingHandle } from './recorder';
 
-export type RecorderState = 'idle' | 'requesting' | 'recording' | 'stopping' | 'error';
+export type RecorderState = 'idle' | 'requesting' | 'recording' | 'paused' | 'stopping' | 'error';
 
 export interface RecordingResult {
   pcm: Float32Array; // 16 kHz mono, whole recording
@@ -16,9 +16,10 @@ export interface UseRecorderOptions {
   onStarted?: (getPcm: () => PcmBuffer) => void;
   onChunk?: (blob: Blob, index: number, mimeType: string) => void;
   onFinished?: (result: RecordingResult) => void;
+  onCancelled?: () => void;
 }
 
-const TICK_MS = 250;
+const TICK_MS = 200;
 
 export function useRecorder(options: UseRecorderOptions = {}) {
   const [state, setState] = useState<RecorderState>('idle');
@@ -43,12 +44,16 @@ export function useRecorder(options: UseRecorderOptions = {}) {
     setState(next);
   }, []);
 
-  const stop = useCallback(async (): Promise<RecordingResult | null> => {
-    const handle = handleRef.current;
-    if (!handle || stateRef.current !== 'recording') return null;
-    setPhase('stopping');
+  const clearTimer = () => {
     if (timerRef.current !== null) window.clearInterval(timerRef.current);
     timerRef.current = null;
+  };
+
+  const stop = useCallback(async (): Promise<RecordingResult | null> => {
+    const handle = handleRef.current;
+    if (!handle || (stateRef.current !== 'recording' && stateRef.current !== 'paused')) return null;
+    setPhase('stopping');
+    clearTimer();
 
     const { durationMs } = await handle.stop();
     handleRef.current = null;
@@ -91,7 +96,7 @@ export function useRecorder(options: UseRecorderOptions = {}) {
       setPhase('recording');
       optionsRef.current.onStarted?.(() => pcmRef.current);
       timerRef.current = window.setInterval(() => {
-        const elapsed = Date.now() - handle.startedAt;
+        const elapsed = handle.elapsedMs();
         setElapsedMs(elapsed);
         if (elapsed >= MAX_RECORDING_SEC * 1000) void stopRef.current();
       }, TICK_MS);
@@ -105,10 +110,35 @@ export function useRecorder(options: UseRecorderOptions = {}) {
     }
   }, [setPhase]);
 
+  const pause = useCallback(() => {
+    if (stateRef.current !== 'recording') return;
+    handleRef.current?.pause();
+    setPhase('paused');
+  }, [setPhase]);
+
+  const resume = useCallback(() => {
+    if (stateRef.current !== 'paused') return;
+    handleRef.current?.resume();
+    setPhase('recording');
+  }, [setPhase]);
+
+  /** Stops the microphone and throws the recording away. */
+  const cancel = useCallback(async () => {
+    const handle = handleRef.current;
+    if (!handle) return;
+    clearTimer();
+    handleRef.current = null;
+    setAnalyser(null);
+    await handle.cancel();
+    setElapsedMs(0);
+    setPhase('idle');
+    optionsRef.current.onCancelled?.();
+  }, [setPhase]);
+
   // Cleanup on unmount: stop timers and release the microphone.
   useEffect(() => {
     return () => {
-      if (timerRef.current !== null) window.clearInterval(timerRef.current);
+      clearTimer();
       const handle = handleRef.current;
       handleRef.current = null;
       void handle?.cancel();
@@ -122,6 +152,9 @@ export function useRecorder(options: UseRecorderOptions = {}) {
     analyser,
     start,
     stop,
+    pause,
+    resume,
+    cancel,
     sampleRate: SAMPLE_RATE,
   };
 }

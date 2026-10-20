@@ -12,7 +12,12 @@ import {
   deleteNote,
   getNote,
   listNotes,
+  applyTranscript,
+  exportBackup,
+  importBackup,
+  listUnfinishedNotes,
   restoreNote,
+  setPinned,
   updateNoteContent,
 } from '../../src/storage/notes';
 
@@ -86,6 +91,77 @@ describe('notes', () => {
     await restoreNote(removed!, database);
     expect(await getNote(note.id, database)).toBeDefined();
     expect(await database.audio.where('noteId').equals(note.id).count()).toBe(1);
+  });
+});
+
+describe('note lifecycle', () => {
+  it('defaults new notes to ready, unpinned', async () => {
+    const note = await createNote(base, database);
+    expect(note.status).toBe('ready');
+    expect(note.pinned).toBe(false);
+  });
+
+  it('pinning leaves updatedAt alone', async () => {
+    const note = await createNote(base, database);
+    await setPinned(note.id, true, database);
+    const pinned = await getNote(note.id, database);
+    expect(pinned?.pinned).toBe(true);
+    expect(pinned?.updatedAt).toBe(note.updatedAt);
+  });
+
+  it('lists queued notes and replaces a generated title with the transcript', async () => {
+    const note = await createNote({ ...base, status: 'queued', autoTitle: true }, database);
+    expect((await listUnfinishedNotes(database)).map((n) => n.id)).toEqual([note.id]);
+    await applyTranscript(
+      note.id,
+      {
+        contentJson: '{}',
+        plainText: 'Final words',
+        segments: [],
+        title: 'Final words',
+        language: 'english',
+        modelId: 'm',
+        device: 'wasm',
+      },
+      database,
+    );
+    const done = await getNote(note.id, database);
+    expect(done?.status).toBe('ready');
+    expect(done?.title).toBe('Final words');
+    expect(await listUnfinishedNotes(database)).toEqual([]);
+  });
+
+  it('keeps a title the person typed', async () => {
+    const note = await createNote({ ...base, status: 'queued', autoTitle: true }, database);
+    await updateNoteContent(
+      note.id,
+      { contentJson: '{}', plainText: '', title: 'My title' },
+      database,
+    );
+    await applyTranscript(
+      note.id,
+      {
+        contentJson: '{}',
+        plainText: 'x',
+        segments: [],
+        title: 'Generated',
+        language: 'english',
+        modelId: 'm',
+        device: 'wasm',
+      },
+      database,
+    );
+    expect((await getNote(note.id, database))?.title).toBe('My title');
+  });
+
+  it('round-trips a text backup and skips existing ids', async () => {
+    const note = await createNote(base, database);
+    const json = await exportBackup(database);
+    expect(await importBackup(json, database)).toBe(0);
+    await database.notes.delete(note.id);
+    expect(await importBackup(json, database)).toBe(1);
+    expect((await getNote(note.id, database))?.title).toBe('Hello');
+    await expect(importBackup('{"format":"other"}', database)).rejects.toThrow();
   });
 });
 

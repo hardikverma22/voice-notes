@@ -11,7 +11,14 @@ export type TranscribeKind = 'live' | 'final';
 export type ToWorker =
   | { type: 'probe' }
   | { type: 'load' }
-  | { type: 'transcribe'; id: number; kind: TranscribeKind; audio: Float32Array };
+  | {
+      type: 'transcribe';
+      id: number;
+      kind: TranscribeKind;
+      audio: Float32Array;
+      /** Whisper language name, or null to auto-detect. */
+      language: string | null;
+    };
 
 /** Worker -> main thread. */
 export type FromWorker =

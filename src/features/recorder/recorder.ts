@@ -20,6 +20,10 @@ export interface RecordingHandle {
   analyser: AnalyserNode;
   mimeType: string;
   startedAt: number;
+  /** Recorded time so far, excluding pauses. */
+  elapsedMs(): number;
+  pause(): void;
+  resume(): void;
   stop(): Promise<{ durationMs: number }>;
   cancel(): Promise<void>;
 }
@@ -91,8 +95,11 @@ export async function startRecording(opts: RecorderOptions): Promise<RecordingHa
   // Deliberately not connected to ctx.destination: that would feed the mic back to the speakers.
 
   const resampler = createStreamingResampler(ctx.sampleRate, SAMPLE_RATE);
+  let paused = false;
+  let pausedAt = 0;
+  let pausedTotal = 0;
   worklet.port.onmessage = (event: MessageEvent<Float32Array>) => {
-    opts.onPcm16k(resampler.push(event.data));
+    if (!paused) opts.onPcm16k(resampler.push(event.data));
   };
 
   const requestedMime = pickMimeType();
@@ -117,14 +124,29 @@ export async function startRecording(opts: RecorderOptions): Promise<RecordingHa
     await ctx.close();
   }
 
+  const elapsedMs = () => (paused ? pausedAt : Date.now()) - startedAt - pausedTotal;
+
   return {
     analyser,
     mimeType,
     startedAt,
+    elapsedMs,
+    pause: () => {
+      if (paused) return;
+      paused = true;
+      pausedAt = Date.now();
+      if (recorder.state === 'recording') recorder.pause();
+    },
+    resume: () => {
+      if (!paused) return;
+      pausedTotal += Date.now() - pausedAt;
+      paused = false;
+      if (recorder.state === 'paused') recorder.resume();
+    },
     stop: () =>
       new Promise((resolve) => {
-        const finish = () =>
-          void teardown().then(() => resolve({ durationMs: Date.now() - startedAt }));
+        const durationMs = elapsedMs();
+        const finish = () => void teardown().then(() => resolve({ durationMs }));
         if (recorder.state === 'inactive') {
           finish();
           return;

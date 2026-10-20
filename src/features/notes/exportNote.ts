@@ -17,9 +17,13 @@ export function fileNameFor(title: string, createdAt: number, ext: string): stri
   return `${slug || 'note'}-${stamp}.${ext}`;
 }
 
-/** Downloads text as a file. The object URL is revoked shortly after the click. */
+/** Downloads text as a file. */
 export function downloadText(name: string, text: string, mime: string): void {
-  const url = URL.createObjectURL(new Blob([text], { type: mime }));
+  downloadBlob(name, new Blob([text], { type: mime }));
+}
+
+export function downloadBlob(name: string, blob: Blob): void {
+  const url = URL.createObjectURL(blob);
   const link = document.createElement('a');
   link.href = url;
   link.download = name;
