@@ -381,11 +381,20 @@ function SearchSection() {
   );
 }
 
+/** Changes whenever a model starts, finishes or fails, so the sizes shown here are re-read. */
+function useDownloadStatusKey(): string {
+  const speech = useModel().status;
+  const accurate = useAccurateModel().status;
+  const search = useEmbedModel().status;
+  return `${speech}|${accurate}|${search}`;
+}
+
 function ModelsSection({ open }: { open: boolean }) {
   const toast = useToast();
   const [models, setModels] = useState<CachedModel[] | null>(null);
   const [confirmId, setConfirmId] = useState<string | null>(null);
   const [version, setVersion] = useState(0);
+  const downloadKey = useDownloadStatusKey();
 
   useEffect(() => {
     if (!open) return;
@@ -400,7 +409,7 @@ function ModelsSection({ open }: { open: boolean }) {
     return () => {
       cancelled = true;
     };
-  }, [open, version]);
+  }, [open, version, downloadKey]);
 
   async function remove(model: CachedModel) {
     await deleteCachedModel(model.id);
@@ -462,7 +471,8 @@ function ModelsSection({ open }: { open: boolean }) {
 function DataSection({ open }: { open: boolean }) {
   const toast = useToast();
   const [version, setVersion] = useState(0);
-  const estimate = useStorageEstimate(`${open}-${version}`);
+  const downloadKey = useDownloadStatusKey();
+  const estimate = useStorageEstimate(`${open}-${version}-${downloadKey}`);
   const [confirmDelete, setConfirmDelete] = useState(false);
   const [busy, setBusy] = useState<'export' | 'import' | null>(null);
   const fileRef = useRef<HTMLInputElement>(null);
