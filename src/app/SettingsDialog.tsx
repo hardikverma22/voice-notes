@@ -103,6 +103,7 @@ function AppearanceSection() {
 
 function TranscriptionSection() {
   const model = useModel();
+  const busy = useDownloadsBusy();
   return (
     <Section title="Transcription">
       <div className="flex flex-col gap-5">
@@ -117,9 +118,16 @@ function TranscriptionSection() {
                 Not downloaded yet (about {model.approxDownloadMB} MB). It downloads automatically
                 on your first recording.
               </p>
-              <Button size="sm" variant="secondary" icon={CloudArrowDownIcon} onClick={loadModel}>
+              <Button
+                size="sm"
+                variant="secondary"
+                icon={CloudArrowDownIcon}
+                onClick={loadModel}
+                disabled={busy.accurate || busy.search}
+              >
                 Download now
               </Button>
+              {busy.accurate || busy.search ? <OtherDownloadNote /> : null}
             </div>
           ) : null}
           {model.status === 'probing' ? (
@@ -138,9 +146,33 @@ function TranscriptionSection() {
   );
 }
 
+/**
+ * Which model downloads are running. Only one runs at a time: the other download buttons stay
+ * disabled until it finishes, because two large downloads at once stall and then fail.
+ */
+function useDownloadsBusy() {
+  const speech = useModel();
+  const accurate = useAccurateModel();
+  const search = useEmbedModel();
+  return {
+    speech: speech.status === 'loading' || speech.status === 'probing',
+    accurate: accurate.status === 'loading',
+    search: search.status === 'loading' || search.status === 'probing',
+  };
+}
+
+function OtherDownloadNote() {
+  return (
+    <p className="text-xs text-fg-muted" role="status">
+      Another model is downloading. Wait for it to finish, then try again.
+    </p>
+  );
+}
+
 function LanguagePicker() {
   const { language, quality } = useTranscriptionSettings();
   const acc = useAccurateModel();
+  const busy = useDownloadsBusy();
   const languageName = LANGUAGES.find((l) => l.value === language)?.label ?? language;
   const accurateOn = quality === 'accurate' && acc.status !== 'unsupported';
   return (
@@ -181,10 +213,8 @@ function LanguagePicker() {
                 <Button
                   size="sm"
                   variant="secondary"
-                  onClick={() => {
-                    setTranscriptionSettings({ quality: 'accurate' });
-                    loadAccurateModel();
-                  }}
+                  disabled={busy.speech || busy.search}
+                  onClick={() => setTranscriptionSettings({ quality: 'accurate' })}
                 >
                   Use Accurate
                 </Button>
@@ -200,6 +230,7 @@ function LanguagePicker() {
 function QualityPicker() {
   const { quality } = useTranscriptionSettings();
   const acc = useAccurateModel();
+  const busy = useDownloadsBusy();
   if (acc.status === 'checking') return null;
   if (acc.status === 'unsupported') {
     return (
@@ -220,10 +251,7 @@ function QualityPicker() {
       <Segmented<Quality>
         label="Transcription quality"
         value={quality}
-        onChange={(next) => {
-          setTranscriptionSettings({ quality: next });
-          if (next === 'accurate') loadAccurateModel();
-        }}
+        onChange={(next) => setTranscriptionSettings({ quality: next })}
         options={[
           { value: 'fast', label: 'Fast' },
           { value: 'accurate', label: 'Accurate' },
@@ -256,16 +284,23 @@ function QualityPicker() {
             variant="secondary"
             icon={CloudArrowDownIcon}
             onClick={loadAccurateModel}
+            disabled={busy.speech || busy.search}
           >
             Download now
           </Button>
+          {busy.speech || busy.search ? <OtherDownloadNote /> : null}
         </div>
       ) : quality === 'accurate' && acc.status === 'error' ? (
         <div className="flex flex-wrap items-center gap-3">
           <p className="text-xs text-danger">
             The Accurate model could not load; the fast one is used meanwhile.
           </p>
-          <Button size="sm" variant="secondary" onClick={loadAccurateModel}>
+          <Button
+            size="sm"
+            variant="secondary"
+            onClick={loadAccurateModel}
+            disabled={busy.speech || busy.search}
+          >
             Try again
           </Button>
         </div>
@@ -277,6 +312,7 @@ function QualityPicker() {
 function SearchSection() {
   const model = useEmbedModel();
   const index = useIndexState();
+  const busy = useDownloadsBusy();
   return (
     <Section title="Search by meaning">
       <p className="text-sm text-fg-muted text-pretty">
@@ -285,10 +321,17 @@ function SearchSection() {
         uploaded.
       </p>
       {model.status === 'off' ? (
-        <div>
-          <Button size="sm" variant="secondary" icon={CloudArrowDownIcon} onClick={turnOnSearch}>
+        <div className="flex flex-wrap items-center gap-3">
+          <Button
+            size="sm"
+            variant="secondary"
+            icon={CloudArrowDownIcon}
+            onClick={turnOnSearch}
+            disabled={busy.speech || busy.accurate}
+          >
             Turn on
           </Button>
+          {busy.speech || busy.accurate ? <OtherDownloadNote /> : null}
         </div>
       ) : model.status === 'loading' || model.status === 'probing' ? (
         <div className="flex flex-col gap-2 text-xs text-fg-muted">
@@ -300,9 +343,15 @@ function SearchSection() {
       ) : model.status === 'error' ? (
         <div className="flex flex-wrap items-center gap-3 text-sm">
           <p className="text-danger">The search model could not load.</p>
-          <Button size="sm" variant="secondary" onClick={turnOnSearch}>
+          <Button
+            size="sm"
+            variant="secondary"
+            onClick={turnOnSearch}
+            disabled={busy.speech || busy.accurate}
+          >
             Try again
           </Button>
+          {busy.speech || busy.accurate ? <OtherDownloadNote /> : null}
         </div>
       ) : (
         <div className="flex flex-col gap-3">
@@ -332,11 +381,20 @@ function SearchSection() {
   );
 }
 
+/** Changes whenever a model starts, finishes or fails, so the sizes shown here are re-read. */
+function useDownloadStatusKey(): string {
+  const speech = useModel().status;
+  const accurate = useAccurateModel().status;
+  const search = useEmbedModel().status;
+  return `${speech}|${accurate}|${search}`;
+}
+
 function ModelsSection({ open }: { open: boolean }) {
   const toast = useToast();
   const [models, setModels] = useState<CachedModel[] | null>(null);
   const [confirmId, setConfirmId] = useState<string | null>(null);
   const [version, setVersion] = useState(0);
+  const downloadKey = useDownloadStatusKey();
 
   useEffect(() => {
     if (!open) return;
@@ -351,7 +409,7 @@ function ModelsSection({ open }: { open: boolean }) {
     return () => {
       cancelled = true;
     };
-  }, [open, version]);
+  }, [open, version, downloadKey]);
 
   async function remove(model: CachedModel) {
     await deleteCachedModel(model.id);
@@ -413,7 +471,8 @@ function ModelsSection({ open }: { open: boolean }) {
 function DataSection({ open }: { open: boolean }) {
   const toast = useToast();
   const [version, setVersion] = useState(0);
-  const estimate = useStorageEstimate(`${open}-${version}`);
+  const downloadKey = useDownloadStatusKey();
+  const estimate = useStorageEstimate(`${open}-${version}-${downloadKey}`);
   const [confirmDelete, setConfirmDelete] = useState(false);
   const [busy, setBusy] = useState<'export' | 'import' | null>(null);
   const fileRef = useRef<HTMLInputElement>(null);
