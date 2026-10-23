@@ -57,10 +57,30 @@ export interface AudioChunk {
   createdAt: number;
 }
 
+/**
+ * A searchable passage of a note and its embedding. Derived data: the search indexer owns it,
+ * rebuilds it from the notes at any time, and backups leave it out.
+ */
+export interface SearchChunk {
+  id: string; // `${noteId}:${index}`
+  noteId: string;
+  text: string;
+  start: number | null;
+  vector: Float32Array;
+}
+/** What a note's chunks were built from, so the indexer can tell when they are stale. */
+export interface SearchIndexEntry {
+  noteId: string;
+  hash: string;
+  indexedAt: number;
+}
+
 export class VoiceNotesDB extends Dexie {
   notes!: EntityTable<Note, 'id'>;
   audio!: EntityTable<AudioRecord, 'id'>;
   audioChunks!: EntityTable<AudioChunk, 'seq'>;
+  searchChunks!: EntityTable<SearchChunk, 'id'>;
+  searchIndex!: EntityTable<SearchIndexEntry, 'noteId'>;
   constructor(name = 'voice-notes') {
     super(name);
     this.version(1).stores({
@@ -100,6 +120,13 @@ export class VoiceNotesDB extends Dexie {
             note.pendingAppend ??= null;
           }),
       );
+    this.version(4).stores({
+      notes: 'id, createdAt, updatedAt, status, *tags',
+      audio: 'id, noteId',
+      audioChunks: '++seq, sessionId, [sessionId+index]',
+      searchChunks: 'id, noteId',
+      searchIndex: 'noteId',
+    });
   }
 }
 export const db = new VoiceNotesDB();

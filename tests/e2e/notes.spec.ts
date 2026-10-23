@@ -58,7 +58,7 @@ test('search filters the library', async ({ page }) => {
   await expect(sidebarNotes(page)).toHaveCount(1);
   await search.fill('zebra');
   await expect(sidebarNotes(page)).toHaveCount(0);
-  await expect(page.getByText('No notes match')).toBeVisible();
+  await expect(page.getByText('No notes contain')).toBeVisible();
 });
 
 test('edits autosave and export downloads with the edited text', async ({ page }) => {

@@ -255,12 +255,16 @@ export async function deleteNote(
   id: string,
   database = db,
 ): Promise<{ note: Note; audio: AudioRecord[] } | null> {
-  return database.transaction('rw', [database.notes, database.audio], async () => {
+  const tables = [database.notes, database.audio, database.searchChunks, database.searchIndex];
+  return database.transaction('rw', tables, async () => {
     const note = await database.notes.get(id);
     if (!note) return null;
     const audio = await database.audio.where('noteId').equals(id).toArray();
     await database.notes.delete(id);
     await database.audio.where('noteId').equals(id).delete();
+    // Search passages hold the note's text; they go with it (Undo re-indexes).
+    await database.searchChunks.where('noteId').equals(id).delete();
+    await database.searchIndex.delete(id);
     return { note, audio };
   });
 }
@@ -285,9 +289,12 @@ export function listUnfinishedNotes(database = db): Promise<Note[]> {
 }
 
 export async function deleteAllNotes(database = db): Promise<void> {
-  await database.transaction('rw', [database.notes, database.audio], async () => {
+  const tables = [database.notes, database.audio, database.searchChunks, database.searchIndex];
+  await database.transaction('rw', tables, async () => {
     await database.notes.clear();
     await database.audio.clear();
+    await database.searchChunks.clear();
+    await database.searchIndex.clear();
   });
 }
 

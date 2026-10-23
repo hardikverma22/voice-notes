@@ -6,6 +6,7 @@ import { MotionProvider } from './design/motion';
 import { ToastProvider } from './design/components/Toast';
 import HomePage from './features/home/HomePage';
 import { RecordingProvider } from './features/recorder/RecordingProvider';
+import { initSearch } from './features/search/searchService';
 import { initModel } from './features/transcribe/modelStore';
 
 const NotePage = lazy(() => import('./features/notes/NotePage'));
@@ -13,6 +14,7 @@ const NotePage = lazy(() => import('./features/notes/NotePage'));
 export default function App() {
   useEffect(() => {
     initModel();
+    initSearch();
   }, []);
   return (
     <MotionProvider>
@@ -31,7 +33,7 @@ function AppContent() {
     <Layout route={route}>
       {route.name === 'note' ? (
         <Suspense fallback={null}>
-          <NotePage key={route.id} id={route.id} />
+          <NotePage key={route.id} id={route.id} t={route.t} />
         </Suspense>
       ) : (
         <HomePage />

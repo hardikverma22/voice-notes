@@ -14,7 +14,8 @@ test.describe('transcription', () => {
     await expect(page.getByRole('progressbar', { name: 'Speech model download' })).toBeVisible();
 
     const live = page.getByRole('region', { name: 'Live transcript' });
-    await expect(live).toContainText(/fox/i, { timeout: 150_000 });
+    // Wait for the whole sentence, so stopping does not cut it short.
+    await expect(live).toContainText(/lazy dog/i, { timeout: 150_000 });
 
     await stopAndOpenNote(page);
     const editor = page.getByRole('textbox', { name: 'Note text' });
