@@ -75,6 +75,15 @@ browser's storage.
   re-transcribe, and delete with **Undo**.
 - **Text notes** too, for when you'd rather type.
 
+**Bring your own recordings, in your own language**
+
+- **Import audio or video** up to an hour each. Drop files anywhere on the window or use the
+  import button. Each file becomes a note, transcribed on your device like a live recording.
+- **21 languages**, chosen in Settings: English (the default), Hindi, Spanish, French, German,
+  Japanese, Chinese, Arabic and more. Non-English transcripts use the Accurate model.
+- **Fast or Accurate.** Fast (Whisper Base) handles live and final transcripts. Accurate
+  (Whisper Small) redoes only the final pass, for better results on WebGPU.
+
 **Built to be trusted**
 
 - **On-device speech recognition.** The model downloads once on first use, with progress shown,
@@ -87,6 +96,7 @@ browser's storage.
 - **Record more** onto the end of an existing note. Your edits stay; the new text is added after.
 - **Your data, portable:** one-file .zip backup with every note, tag and recording, and restore
   that skips notes already present. Storage usage and delete everything.
+- **Model manager:** Settings lists each downloaded model with its size, and removes one on request.
 
 ## Screenshots
 
@@ -159,7 +169,10 @@ flowchart LR
    starts right away, and live text begins once the model is ready.
 
 Inference never runs on the main thread, and `@huggingface/transformers` is only imported by
-the worker. CI enforces both.
+the workers. CI enforces both.
+
+Search by meaning works the same way on a separate worker. It runs on the CPU, so Whisper keeps
+the GPU to itself. See [docs/semantic-search.md](docs/semantic-search.md) for the design.
 
 ## Quick start
 
@@ -174,7 +187,8 @@ npm run dev
 ```
 
 Open <http://localhost:5173>, press the mic, and allow microphone access. The first recording
-downloads the speech model (about 80 MB on CPU, about 200 MB with WebGPU).
+downloads the speech model (about 80 MB on CPU, about 200 MB with WebGPU). Search by meaning and the Accurate model are
+separate downloads, and both are opt-in.
 
 > [!NOTE]
 > `--ignore-scripts` skips the install script of `onnxruntime-node`, a Node-only transitive
@@ -182,20 +196,21 @@ downloads the speech model (about 80 MB on CPU, about 200 MB with WebGPU).
 
 ### Scripts
 
-| Script                            | What it does                                                          |
-| --------------------------------- | --------------------------------------------------------------------- |
-| `npm run dev`                     | Development server on port 5173                                       |
-| `npm run build`                   | Production build into `dist/`                                         |
-| `npm run preview`                 | Serve `dist/` on port 4391 (used by the e2e tests)                    |
-| `npm run typecheck`               | TypeScript for app code and config                                    |
-| `npm run lint`                    | ESLint (flat config, React hooks rules)                               |
-| `npm run format` / `format:check` | Prettier                                                              |
-| `npm run test`                    | Unit tests (Vitest; jsdom and node environments)                      |
-| `npm run test:e2e`                | Generates audio fixtures, then runs Playwright with a fake microphone |
-| `npm run check:bundle`            | Entry-chunk budget, and transformers.js must stay inside the worker   |
-| `npm run check:contrast`          | WCAG contrast for every design-token pair, light and dark             |
-| `npm run verify`                  | Everything above except e2e, in order: run this before opening a PR   |
-| `npm run icons`                   | Regenerates the PWA icons                                             |
+| Script                              | What it does                                                              |
+| ----------------------------------- | ------------------------------------------------------------------------- |
+| `npm run dev`                       | Development server on port 5173                                           |
+| `npm run build`                     | Production build into `dist/`                                             |
+| `npm run preview`                   | Serve `dist/` on port 4391 (used by the e2e tests)                        |
+| `npm run typecheck`                 | TypeScript for app code and config                                        |
+| `npm run lint`                      | ESLint (flat config, React hooks rules)                                   |
+| `npm run format` / `format:check`   | Prettier                                                                  |
+| `npm run test`                      | Unit tests (Vitest; jsdom and node environments)                          |
+| `npm run test:e2e`                  | Generates audio fixtures, then runs Playwright with a fake microphone     |
+| `npm run check:bundle`              | Entry-chunk budget, and transformers.js must stay inside the worker       |
+| `npm run check:contrast`            | WCAG contrast for every design-token pair, light and dark                 |
+| `npm run verify`                    | Everything above except e2e, in order: run this before opening a PR       |
+| `node scripts/bench-embeddings.mjs` | Benchmarks search models on synthetic notes (see docs/semantic-search.md) |
+| `npm run icons`                     | Regenerates the PWA icons                                                 |
 
 Regenerate the screenshots in this README with:
 
@@ -210,31 +225,39 @@ src/
 ├── app/                 Shell: layout + sidebar, router, settings dialog, theme,
 │                        recording pill, update prompt, storage estimate
 ├── design/              tokens.css (colour, type, radius, motion), motion provider,
-│   └── components/      Button, Dialog, Menu, Segmented, Toast, ProgressBar, Kbd
+│   └── components/      Button, Dialog, Menu, Segmented, Select, Toast, ProgressBar, Kbd
 ├── features/
 │   ├── home/            Recorder hero: greeting, record stage, live view, saved card
 │   ├── recorder/        RecordingProvider (app-wide mic owner), recorder, AudioWorklet,
 │   │                    resampler, PCM buffer, waveform, audio level, decode utilities
-│   ├── transcribe/      Worker protocol and client, model store, transcription queue,
-│   │                    live-merge rules, live transcript, model indicators
-│   └── notes/           Library (search, groups, filters), note page, Tiptap editor,
-│                        audio player, timestamps view, export, titles
-├── storage/             Dexie schema (v2) and note / audio operations
+│   ├── transcribe/      Worker protocol and client, model store and cache manager,
+│   │                    transcription queue, Fast / Accurate settings, live-merge rules
+│   ├── import/          Audio and video files turned into notes
+│   ├── search/          Chunking, embedding store, indexer, cosine ranking, related notes
+│   ├── tasks/           Checklist items from every note, for the Tasks page
+│   └── notes/           Library (search, groups, filters, tags), note page, Tiptap editor,
+│                        audio player, timestamps, marked moments, export, titles
+├── lib/                 Formatting, debounce, tag helpers
+├── storage/             Dexie schema (v4), note and audio operations, zip backup and restore
+├── dev/                 Demo notes, for development builds only
 └── workers/
-    └── whisper.worker.ts  The only importer of @huggingface/transformers
+    ├── whisper.worker.ts  Speech recognition (Whisper)
+    └── embed.worker.ts    Embeddings for search by meaning and related notes
 ```
 
 ### Key design decisions
 
-| Decision                                            | Why                                                                                                          |
-| --------------------------------------------------- | ------------------------------------------------------------------------------------------------------------ |
-| Recording lives in an app-level `RecordingProvider` | Navigating between notes never stops the microphone.                                                         |
-| Save the note before the final transcription        | Stopping always ends with a saved note. Transcription is retried, never lost.                                |
-| Two capture paths (MediaRecorder + AudioWorklet)    | Compressed audio for storage and playback; exact PCM for Whisper, without decoding twice.                    |
-| One worker, one job at a time                       | Final passes jump the queue, and a newer live request replaces a waiting one, so the UI never piles up work. |
-| Model state in a tiny external store                | Header chip, recorder, note page and settings all show the same download progress.                           |
-| Motion features lazy-loaded                         | Animation code loads in its own chunk; the entry bundle stays around 133 kB gzip.                            |
-| Hash routing                                        | Works on GitHub Pages and offline with no server rewrites.                                                   |
+| Decision                                            | Why                                                                                                             |
+| --------------------------------------------------- | --------------------------------------------------------------------------------------------------------------- |
+| Recording lives in an app-level `RecordingProvider` | Navigating between notes never stops the microphone.                                                            |
+| Save the note before the final transcription        | Stopping always ends with a saved note. Transcription is retried, never lost.                                   |
+| Two capture paths (MediaRecorder + AudioWorklet)    | Compressed audio for storage and playback; exact PCM for Whisper, without decoding twice.                       |
+| One worker, one job at a time                       | Final passes jump the queue, and a newer live request replaces a waiting one, so the UI never piles up work.    |
+| Model state in a tiny external store                | Header chip, recorder, note page and settings all show the same download progress.                              |
+| Motion features lazy-loaded                         | Animation code loads in its own chunk; start-up JavaScript is held under a 170 kB gzip budget (`check:bundle`). |
+| Search index is derived data                        | Chunks and vectors can be rebuilt at any time, so they are left out of backups and deleted with their note.     |
+| Accurate model only for the final pass              | Live text stays fast on the Fast model. The bigger model runs once, when the note is finalised.                 |
+| Hash routing                                        | Works on GitHub Pages and offline with no server rewrites.                                                      |
 
 ### Data model
 
@@ -250,6 +273,8 @@ erDiagram
     string status "ready | queued | transcribing | failed"
     boolean pinned
     boolean autoTitle "title may be replaced by transcript"
+    array tags
+    array bookmarks "marked moments"
     number durationMs
     number createdAt
   }
@@ -265,6 +290,17 @@ erDiagram
     number index
     blob blob
   }
+  SEARCH_CHUNK {
+    string id PK
+    string noteId FK
+    string text
+    number start "seconds, for click-to-play"
+    array vector
+  }
+  SEARCH_INDEX {
+    string noteId PK
+    string hash "re-index when this changes"
+  }
 ```
 
 `audioChunks` holds a recording while it's in progress. On stop, the chunks are joined into one
@@ -273,25 +309,28 @@ into a recovered note at the next start.
 
 ### Tech stack
 
-| Area    | Choice                                                                             |
-| ------- | ---------------------------------------------------------------------------------- |
-| UI      | React 19, Tailwind CSS 4, Motion, Phosphor icons, Inter + Fraunces                 |
-| Editor  | Tiptap 3 (StarterKit, task lists, highlight, Markdown, bubble menu)                |
-| Speech  | `onnx-community/whisper-base` via `@huggingface/transformers` 4 (ONNX Runtime Web) |
-| Storage | IndexedDB through Dexie 4, with live queries                                       |
-| Offline | `vite-plugin-pwa` (Workbox); fonts and app shell are precached                     |
-| Build   | Vite 8 (Rolldown), TypeScript 6                                                    |
-| Quality | Vitest, Playwright, axe-core, ESLint, Prettier                                     |
+| Area    | Choice                                                                                                    |
+| ------- | --------------------------------------------------------------------------------------------------------- |
+| UI      | React 19, Tailwind CSS 4, Motion, Phosphor icons, Inter + Fraunces                                        |
+| Editor  | Tiptap 3 (StarterKit, task lists, highlight, Markdown, bubble menu)                                       |
+| Speech  | `whisper-base` (Fast) and `whisper-small` (Accurate) via `@huggingface/transformers` 4 (ONNX Runtime Web) |
+| Search  | `Snowflake/snowflake-arctic-embed-xs` embeddings in a worker, brute-force cosine similarity               |
+| Backup  | `fflate` for the one-file zip backup                                                                      |
+| Storage | IndexedDB through Dexie 4, with live queries                                                              |
+| Offline | `vite-plugin-pwa` (Workbox); fonts and app shell are precached                                            |
+| Build   | Vite 8 (Rolldown), TypeScript 6                                                                           |
+| Quality | Vitest, Playwright, axe-core, ESLint, Prettier                                                            |
 
 ### Model details
 
-| Setting         | Value                                                     |
-| --------------- | --------------------------------------------------------- |
-| Model           | `onnx-community/whisper-base`                             |
-| WebGPU download | fp32 encoder + 4-bit decoder, about 202 MB                |
-| WASM download   | 8-bit encoder + decoder, about 80 MB                      |
-| Language        | English (Whisper Base isn't reliable for other languages) |
-| Final pass      | 30 s chunks with 5 s stride, timestamped segments         |
+| Setting         | Value                                                                                    |
+| --------------- | ---------------------------------------------------------------------------------------- |
+| Model           | `onnx-community/whisper-base`                                                            |
+| WebGPU download | fp32 encoder + 4-bit decoder, about 202 MB                                               |
+| WASM download   | 8-bit encoder + decoder, about 80 MB                                                     |
+| Languages       | 21 in Settings, English by default (non-English uses Accurate)                           |
+| Final pass      | 30 s chunks with 5 s stride, timestamped segments                                        |
+| Accurate model  | `onnx-community/whisper-small`, fp16 encoder + q4 decoder, about 410 MB, final pass only |
 
 If WebGPU has no adapter or fails to load, the worker falls back to WASM and the header shows
 **CPU**. For a smaller download, set `MODEL_ID` in `src/features/transcribe/config.ts` to
@@ -301,7 +340,9 @@ If WebGPU has no adapter or fails to load, the worker falls back to WASM and the
 
 What leaves your device:
 
-- **The one-time model download** from `huggingface.co`, cached by the browser afterwards.
+- **One-time model downloads** from `huggingface.co`, cached by the browser afterwards: the
+  speech model (about 80 to 200 MB), and only if you use them, the Accurate speech model
+  (about 410 MB) and the search model (about 24 MB).
 - **The ONNX runtime** for the model, from `cdn.jsdelivr.net`, also cached afterwards.
 
 That's all. Audio, transcripts and notes are stored in your browser's IndexedDB. There are no
@@ -319,12 +360,15 @@ notes**, removes everything.
 ## Testing
 
 - **Unit (Vitest):** live-merge rules, resampler, PCM buffer, MIME selection, titles, export
-  names, library grouping, search and snippets, storage lifecycle (status, pinning,
-  auto-titles, backups), and component tests.
+  names, library grouping, search and snippets, task extraction, transcription settings,
+  stuck-job detection, storage lifecycle (status, pinning, auto-titles, tags, backups), and
+  component tests.
 - **End-to-end (Playwright):** a fake microphone plays a generated WAV, covering record, pause,
   discard, Space toggle, recording while browsing, first-run model download with progress,
   final transcription, reload persistence, delete with undo, crash recovery, search, autosave,
-  export, and offline use. Speech fixtures need macOS `say`; those tests skip elsewhere.
+  export, and offline use. It also covers file import (and rejecting non-audio), tags and
+  filtering, marked moments, record-more, the Tasks page, and search by meaning with related
+  notes. Speech fixtures need macOS `say`; those tests skip elsewhere.
 - **Accessibility:** axe (WCAG 2.0/2.1 AA) on home and note pages in light and dark, plus a
   phone-width layout check. Contrast for every token pair runs in `npm run verify`.
 
@@ -337,13 +381,21 @@ publishing. Any static host works: serve `dist/` over HTTPS.
 
 ## Roadmap
 
-- [ ] Multilingual transcription with a larger model (for example Whisper Small) as an opt-in
-      "Accurate" mode
+- [x] Multilingual transcription, with an opt-in "Accurate" mode (Whisper Small)
+- [x] Import audio and video files
 - [x] Append a new recording to an existing note
 - [x] Tags (folders may follow)
 - [x] Full backup including audio (zip)
 - [x] On-device semantic search across notes, with related notes
+- [x] Tasks page collecting checklist items from every note
+- [ ] Folders, built on tags
 - [ ] Optional end-to-end encrypted sync between your own devices
+
+## Further reading
+
+- [docs/semantic-search.md](docs/semantic-search.md): the search model benchmark and design
+- [PRODUCT.md](PRODUCT.md) and [DESIGN.md](DESIGN.md): product and design direction
+- [PLAN.md](PLAN.md): the build plan and decision log
 
 ## Contributing
 

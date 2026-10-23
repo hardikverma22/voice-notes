@@ -35,9 +35,14 @@ export async function listCachedModels(): Promise<CachedModel[]> {
   const sizes = new Map<string, number>();
   for (const request of await cache.keys()) {
     const response = await cache.match(request);
+    // content-length is the compressed transfer size when the CDN gzips the file (the ONNX
+    // runtime does), so it under-reports. Measure the stored body in that case.
     const length = Number(response?.headers.get('content-length'));
+    const compressed = response?.headers.has('content-encoding') ?? false;
     const bytes =
-      Number.isFinite(length) && length > 0 ? length : ((await response?.blob())?.size ?? 0);
+      !compressed && Number.isFinite(length) && length > 0
+        ? length
+        : ((await response?.blob())?.size ?? 0);
     const id = modelIdOf(request.url);
     sizes.set(id, (sizes.get(id) ?? 0) + bytes);
   }
