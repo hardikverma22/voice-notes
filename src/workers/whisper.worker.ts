@@ -1,6 +1,8 @@
 import { ModelRegistry, env, pipeline, type ProgressInfo } from '@huggingface/transformers';
 import {
+  ACCURATE_MODEL_ID,
   ASR_TASK,
+  DTYPE_ACCURATE,
   DTYPE_WASM,
   DTYPE_WEBGPU,
   FINAL_CHUNK_LENGTH_S,
@@ -9,6 +11,7 @@ import {
   MODEL_ID,
   SAMPLE_RATE,
 } from '../features/transcribe/config';
+import { looksStuck, REPEAT_GUARD } from '../features/transcribe/stuck';
 import type {
   Device,
   FromWorker,
@@ -31,7 +34,7 @@ interface AsrOutput {
 type Asr = (audio: Float32Array, options: Record<string, unknown>) => Promise<unknown>;
 
 interface GpuLike {
-  requestAdapter(): Promise<unknown | null>;
+  requestAdapter(): Promise<{ features: Set<string> } | null>;
 }
 
 function post(message: FromWorker): void {
@@ -121,6 +124,69 @@ function ensureLoaded(): Promise<Asr> {
   return loadPromise;
 }
 
+// Accurate model: whisper-small, WebGPU with fp16 only. Loaded on request, used for final passes.
+let accuratePromise: Promise<Asr> | null = null;
+let lastAccurateProgressAt = 0;
+
+async function accurateSupported(): Promise<boolean> {
+  try {
+    if (!('gpu' in navigator)) return false;
+    const adapter = await (navigator as unknown as { gpu: GpuLike }).gpu.requestAdapter();
+    return adapter?.features.has('shader-f16') ?? false;
+  } catch {
+    return false;
+  }
+}
+
+/**
+ * Whether the Accurate model's two weight files are in the browser cache. Checked directly:
+ * the library's own check does not recognise this mixed-precision setup.
+ */
+async function accurateFilesCached(): Promise<boolean> {
+  try {
+    if (typeof caches === 'undefined' || !(await caches.has('transformers-cache'))) return false;
+    const urls = (await (await caches.open('transformers-cache')).keys()).map((r) => r.url);
+    const files = [
+      `encoder_model_${DTYPE_ACCURATE.encoder_model}.onnx`,
+      `decoder_model_merged_${DTYPE_ACCURATE.decoder_model_merged}.onnx`,
+    ];
+    return files.every((file) =>
+      urls.some((url) => url.includes(`/${ACCURATE_MODEL_ID}/`) && url.endsWith(file)),
+    );
+  } catch {
+    return false;
+  }
+}
+
+function ensureAccurate(): Promise<Asr> {
+  if (!accuratePromise) {
+    accuratePromise = (async () => {
+      if (!(await accurateSupported()))
+        throw new Error('This device cannot run the Accurate model.');
+      // One model loads at a time: two large loads at once can exhaust memory.
+      if (loadPromise) await loadPromise.catch(() => undefined);
+      const progress_callback = (info: ProgressInfo) => {
+        if (info.status !== 'progress_total') return;
+        const now = Date.now();
+        if (now - lastAccurateProgressAt < 100 && info.progress < 100) return;
+        lastAccurateProgressAt = now;
+        post({ type: 'accurate-progress', progress: info.progress });
+      };
+      const asr = (await pipeline(ASR_TASK, ACCURATE_MODEL_ID, {
+        device: 'webgpu',
+        dtype: DTYPE_ACCURATE,
+        progress_callback,
+      })) as unknown as Asr;
+      await asr(new Float32Array(SAMPLE_RATE), { language: LANGUAGE, task: 'transcribe' });
+      return asr;
+    })();
+    accuratePromise.catch(() => {
+      accuratePromise = null;
+    });
+  }
+  return accuratePromise;
+}
+
 // Transcription queue: at most one job runs at a time. A new live request replaces a queued
 // live request. Final requests are never dropped and run before queued live requests.
 let busy = false;
@@ -132,20 +198,28 @@ interface Job {
   kind: TranscribeKind;
   audio: Float32Array;
   language: string | null;
+  accurate: boolean;
 }
 
-async function runJob({ id, kind, audio, language }: Job): Promise<void> {
+async function runJob({ id, kind, audio, language, accurate }: Job): Promise<void> {
   const started = performance.now();
   try {
-    const asr = await ensureLoaded();
-    const output = (await asr(audio, {
-      ...(language ? { language } : {}),
-      task: 'transcribe',
-      return_timestamps: true,
-      ...(kind === 'final'
-        ? { chunk_length_s: FINAL_CHUNK_LENGTH_S, stride_length_s: FINAL_STRIDE_LENGTH_S }
-        : {}),
-    })) as AsrOutput;
+    const asr = accurate && kind === 'final' ? await ensureAccurate() : await ensureLoaded();
+    const decode = async (guard: boolean) =>
+      (await asr(audio, {
+        ...(language ? { language } : {}),
+        task: 'transcribe',
+        return_timestamps: true,
+        ...(guard ? REPEAT_GUARD : {}),
+        ...(kind === 'final'
+          ? { chunk_length_s: FINAL_CHUNK_LENGTH_S, stride_length_s: FINAL_STRIDE_LENGTH_S }
+          : {}),
+      })) as AsrOutput;
+    // Non-English always decodes with the loop guard. English decodes plainly (the guard can
+    // alter real repeated phrases) and retries with it only if the result looks stuck.
+    const guardFirst = language !== null && language !== 'english';
+    let output = await decode(guardFirst);
+    if (!guardFirst && looksStuck(output.text)) output = await decode(true);
     const chunks: Segment[] = (output.chunks ?? []).map((chunk) => ({
       text: chunk.text,
       start: chunk.timestamp[0],
@@ -238,7 +312,26 @@ self.onmessage = (event: MessageEvent<ToWorker>) => {
         kind: message.kind,
         audio: message.audio,
         language: message.language,
+        accurate: message.accurate,
       });
+      break;
+    case 'probe-accurate':
+      void (async () => {
+        const supported = await accurateSupported();
+        const cached = supported ? await accurateFilesCached() : false;
+        post({ type: 'accurate-probe-result', supported, cached: Boolean(cached) });
+      })();
+      break;
+    case 'load-accurate':
+      ensureAccurate()
+        .then(() => post({ type: 'accurate-ready', modelId: ACCURATE_MODEL_ID }))
+        .catch((error: unknown) =>
+          post({
+            type: 'error',
+            stage: 'load-accurate',
+            message: error instanceof Error ? error.message : String(error),
+          }),
+        );
       break;
   }
 };

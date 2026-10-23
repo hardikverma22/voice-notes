@@ -29,6 +29,7 @@ import { deleteNote, listNotes, renameNote, restoreNote, setPinned } from '../..
 import { extensionFor } from '../recorder/mime';
 import { downloadBlob, fileNameFor } from './exportNote';
 import { MeaningResults } from '../search/MeaningResults';
+import { ImportButton } from '../import/ImportControls';
 import { TasksLink } from '../tasks/TasksLink';
 import { createTextNote } from './createTextNote';
 import { filterNotes, groupNotes, listTime, snippet } from './groupNotes';
@@ -108,15 +109,16 @@ export function NotesLibrary({ variant }: { variant: 'sidebar' | 'page' }) {
     <div className={`flex min-h-0 flex-col ${variant === 'sidebar' ? 'flex-1' : ''}`}>
       <div className={variant === 'sidebar' ? 'px-3 pb-2' : 'pb-3'}>
         {variant === 'page' ? (
-          <div className="mb-4 flex items-end justify-between gap-3">
+          <div className="mb-4 flex flex-col gap-3">
             <div>
               <h2 className="font-serif text-2xl font-medium">Your notes</h2>
               <p className="mt-0.5 text-xs text-fg-muted">
                 {notes.length} {notes.length === 1 ? 'note' : 'notes'} · {totalMinutes} min recorded
               </p>
             </div>
-            <div className="flex items-center gap-2">
+            <div className="flex flex-wrap items-center gap-2">
               <TasksLink variant="chip" active={false} />
+              <ImportButton variant="chip" />
               <NewTextNoteButton />
             </div>
           </div>
@@ -530,7 +532,7 @@ export function NewTextNoteButton() {
     <button
       type="button"
       onClick={() => void createTextNote().then((id) => navigate(`/note/${id}`))}
-      className="inline-flex min-h-9 items-center gap-1.5 rounded-full border border-border bg-surface px-3 text-xs font-medium shadow-sm transition-colors hover:bg-surface-2 focus-visible:outline-2 focus-visible:outline-focus"
+      className="inline-flex min-h-9 items-center justify-center gap-1.5 rounded-full border border-border bg-surface px-3 text-xs font-medium shadow-sm transition-colors hover:bg-surface-2 focus-visible:outline-2 focus-visible:outline-focus"
     >
       <NotePencilIcon aria-hidden="true" className="size-4" />
       Text note

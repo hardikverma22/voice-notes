@@ -47,17 +47,26 @@ class WhisperClient {
     this.post({ type: 'load' });
   }
 
+  probeAccurate(): void {
+    this.post({ type: 'probe-accurate' });
+  }
+
+  loadAccurate(): void {
+    this.post({ type: 'load-accurate' });
+  }
+
   transcribe(
     kind: TranscribeKind,
     audio: Float32Array,
     language: string | null,
+    accurate = false,
   ): Promise<TranscribeResult> {
     const id = this.nextId++;
     // Send a copy so the caller's buffer is never detached.
     const copy = audio.slice();
     return new Promise<TranscribeResult>((resolve, reject) => {
       this.pending.set(id, { kind, resolve, reject });
-      this.post({ type: 'transcribe', id, kind, audio: copy, language }, [copy.buffer]);
+      this.post({ type: 'transcribe', id, kind, audio: copy, language, accurate }, [copy.buffer]);
     });
   }
 

@@ -5,6 +5,7 @@ export {
   ArrowLeftIcon,
   ArrowRightIcon,
   ArrowsClockwiseIcon,
+  CaretDownIcon,
   BookmarkSimpleIcon,
   CheckCircleIcon,
   CheckIcon,

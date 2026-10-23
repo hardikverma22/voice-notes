@@ -5,6 +5,7 @@ import '@fontsource-variable/fraunces/wght.css';
 import '@fontsource-variable/fraunces/wght-italic.css';
 import App from './App';
 import './index.css';
+import './design/inputModality';
 
 const rootElement = document.getElementById('root');
 if (!rootElement) {

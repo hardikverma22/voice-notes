@@ -10,9 +10,22 @@ import {
 import { titleFromTranscript } from '../notes/title';
 import { transcriptToDoc } from '../notes/transcriptToDoc';
 import { decodeToPcm16k } from '../recorder/decode';
-import { LANGUAGE, MODEL_ID, SAMPLE_RATE } from './config';
+import { ACCURATE_MODEL_ID, MODEL_ID, SAMPLE_RATE } from './config';
 import { joinSegments } from './merge';
-import { getModelState, transcribe, whenModelReady } from './modelStore';
+import { getModelState, transcribe, whenAccurateReady, whenModelReady } from './modelStore';
+import { getTranscriptionSettings } from './settings';
+
+/** Accurate when chosen and it loads; otherwise the fast model, so a note is never left waiting. */
+async function pickAccurate(): Promise<boolean> {
+  if (getTranscriptionSettings().quality !== 'accurate') return false;
+  try {
+    await whenAccurateReady();
+    return true;
+  } catch (error) {
+    console.warn('Accurate model unavailable, using the fast model', error);
+    return false;
+  }
+}
 
 /**
  * Runs the final transcription pass for saved notes, one at a time. A note is saved before it
@@ -82,7 +95,8 @@ async function runOne(noteId: string): Promise<void> {
       if (offsetSec !== null) pcm = pcm.subarray(Math.round(offsetSec * SAMPLE_RATE));
     }
 
-    const result = await transcribe('final', pcm);
+    const accurate = await pickAccurate();
+    const result = await transcribe('final', pcm, { accurate });
     const text = joinSegments(result.chunks) || result.text.trim();
     if (offsetSec !== null) {
       await applyAppendedTranscript(noteId, {
@@ -102,8 +116,8 @@ async function runOne(noteId: string): Promise<void> {
       plainText: text,
       segments: result.chunks,
       title: titleFromTranscript(text, note.createdAt),
-      language: LANGUAGE,
-      modelId: MODEL_ID,
+      language: getTranscriptionSettings().language,
+      modelId: accurate ? ACCURATE_MODEL_ID : MODEL_ID,
       device: getModelState().device ?? 'wasm',
       durationMs: Math.round((pcm.length / SAMPLE_RATE) * 1000),
     });

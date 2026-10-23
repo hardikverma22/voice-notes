@@ -1,5 +1,6 @@
 import { useSyncExternalStore } from 'react';
-import { LANGUAGE } from './config';
+import { APPROX_ACCURATE_MB } from './config';
+import { getTranscriptionSettings, whisperLanguage } from './settings';
 import type { Device, FromWorker, TranscribeKind } from './protocol';
 import { getWhisperClient, type TranscribeResult } from './whisperClient';
 
@@ -40,7 +41,108 @@ function set(patch: Partial<ModelState>): void {
   for (const listener of listeners) listener();
 }
 
+/**
+ * The optional Accurate model (whisper-small). checking: asking the worker whether this device
+ * can run it. unsupported: no WebGPU with fp16. idle: supported, not downloaded or not loaded.
+ */
+export type AccurateStatus = 'checking' | 'unsupported' | 'idle' | 'loading' | 'ready' | 'error';
+export interface AccurateState {
+  status: AccurateStatus;
+  percent: number;
+  cached: boolean;
+  approxDownloadMB: number;
+}
+let accurate: AccurateState = {
+  status: 'checking',
+  percent: 0,
+  cached: false,
+  approxDownloadMB: APPROX_ACCURATE_MB,
+};
+const accurateListeners = new Set<() => void>();
+let accurateWaiters: { resolve(): void; reject(error: Error): void }[] = [];
+function setAccurate(patch: Partial<AccurateState>): void {
+  accurate = { ...accurate, ...patch };
+  for (const listener of accurateListeners) listener();
+}
+
+function onAccurateMessage(message: FromWorker): void {
+  switch (message.type) {
+    case 'accurate-probe-result':
+      setAccurate({
+        status: message.supported ? 'idle' : 'unsupported',
+        cached: message.cached,
+      });
+      // Chosen in an earlier visit and already downloaded: load it in the background once the
+      // fast model is up, never at the same time (two large loads at once can run out of memory).
+      if (message.supported && message.cached && getTranscriptionSettings().quality === 'accurate')
+        void whenModelReady()
+          .then(loadAccurateModel)
+          .catch(() => undefined);
+      break;
+    case 'accurate-progress':
+      setAccurate({ percent: message.progress });
+      break;
+    case 'accurate-ready':
+      setAccurate({ status: 'ready', percent: 100, cached: true });
+      for (const waiter of accurateWaiters) waiter.resolve();
+      accurateWaiters = [];
+      break;
+    case 'error':
+      if (message.stage === 'load-accurate') {
+        console.error('Accurate model failed to load:', message.message);
+        setAccurate({ status: 'error' });
+        const error = new Error(message.message);
+        for (const waiter of accurateWaiters) waiter.reject(error);
+        accurateWaiters = [];
+      }
+      break;
+    default:
+      break;
+  }
+}
+
+/** Downloads (first time) and loads the Accurate model. */
+export function loadAccurateModel(): void {
+  initModel();
+  if (accurate.status === 'loading' || accurate.status === 'ready') return;
+  if (accurate.status === 'unsupported') return;
+  setAccurate({ status: 'loading', percent: 0 });
+  getWhisperClient().loadAccurate();
+}
+
+/** Resolves when the Accurate model is ready; rejects if it cannot run here or fails to load. */
+export function whenAccurateReady(): Promise<void> {
+  if (accurate.status === 'ready') return Promise.resolve();
+  if (accurate.status === 'unsupported') {
+    return Promise.reject(new Error('Accurate is not available on this device'));
+  }
+  const promise = new Promise<void>((resolve, reject) => accurateWaiters.push({ resolve, reject }));
+  loadAccurateModel();
+  return promise;
+}
+
+/** After its files are deleted: it downloads again if chosen (a loaded copy still works now). */
+export function forgetAccurateDownload(): void {
+  if (accurate.status !== 'unsupported') setAccurate({ cached: false, status: 'idle', percent: 0 });
+}
+
+export function getAccurateState(): AccurateState {
+  return accurate;
+}
+
+export function useAccurateModel(): AccurateState {
+  return useSyncExternalStore(
+    (listener) => {
+      accurateListeners.add(listener);
+      return () => accurateListeners.delete(listener);
+    },
+    getAccurateState,
+    getAccurateState,
+  );
+}
+
 function onMessage(message: FromWorker): void {
+  onAccurateMessage(message);
   switch (message.type) {
     case 'probe-result':
       set({
@@ -80,6 +182,7 @@ export function initModel(): void {
   const client = getWhisperClient();
   client.subscribe(onMessage);
   client.probe();
+  client.probeAccurate();
 }
 
 /** Starts the download (or cache load) if it is not running or done already. */
@@ -118,12 +221,19 @@ export function useModel(): ModelState {
 let inFlight = 0;
 let lastActivityAt = 0;
 
-/** Transcribes English speech. Other languages need a larger model (not offered yet). */
-export function transcribe(kind: TranscribeKind, audio: Float32Array): Promise<TranscribeResult> {
+/**
+ * Transcribes in the language chosen in Settings (or detects it). With accurate, the final pass
+ * runs on the Accurate model, which the caller must have loaded (whenAccurateReady).
+ */
+export function transcribe(
+  kind: TranscribeKind,
+  audio: Float32Array,
+  options: { accurate?: boolean } = {},
+): Promise<TranscribeResult> {
   inFlight++;
   lastActivityAt = Date.now();
   return getWhisperClient()
-    .transcribe(kind, audio, LANGUAGE)
+    .transcribe(kind, audio, whisperLanguage(), options.accurate === true)
     .finally(() => {
       inFlight--;
       lastActivityAt = Date.now();

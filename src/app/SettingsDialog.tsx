@@ -1,12 +1,14 @@
-import { useRef, useState, type ReactNode } from 'react';
+import { useEffect, useRef, useState, type ReactNode } from 'react';
 import { Button } from '../design/components/Button';
 import { Dialog } from '../design/components/Dialog';
 import { Kbd } from '../design/components/Kbd';
 import { ProgressBar } from '../design/components/ProgressBar';
 import { Segmented } from '../design/components/Segmented';
+import { Select } from '../design/components/Select';
 import { useToast } from '../design/components/useToast';
 import {
   ArrowsClockwiseIcon,
+  CheckCircleIcon,
   CloudArrowDownIcon,
   DesktopIcon,
   DownloadSimpleIcon,
@@ -14,10 +16,31 @@ import {
   SunIcon,
   TrashIcon,
   UploadSimpleIcon,
+  WarningCircleIcon,
 } from '../design/icons';
 import { downloadBlob } from '../features/notes/exportNote';
 import { ModelProgressCard, ModelReadyLine } from '../features/transcribe/ModelIndicator';
-import { loadModel, useModel } from '../features/transcribe/modelStore';
+import { EMBED_MODEL_ID } from '../features/search/config';
+import { ACCURATE_MODEL_ID, MODEL_ID } from '../features/transcribe/config';
+import {
+  deleteCachedModel,
+  listCachedModels,
+  type CachedModel,
+} from '../features/transcribe/modelCache';
+import {
+  forgetAccurateDownload,
+  loadAccurateModel,
+  loadModel,
+  useAccurateModel,
+  useModel,
+} from '../features/transcribe/modelStore';
+import {
+  LANGUAGES,
+  needsAccurate,
+  setTranscriptionSettings,
+  useTranscriptionSettings,
+  type Quality,
+} from '../features/transcribe/settings';
 import { useEmbedModel } from '../features/search/embedStore';
 import { useIndexState } from '../features/search/indexer';
 import { rebuildSearchIndex, turnOffSearch, turnOnSearch } from '../features/search/searchService';
@@ -39,6 +62,7 @@ export function SettingsDialog({ open, onClose }: { open: boolean; onClose: () =
         <AppearanceSection />
         <TranscriptionSection />
         <SearchSection />
+        <ModelsSection open={open} />
         <DataSection open={open} />
         <ShortcutsSection />
         {import.meta.env.DEV ? <DeveloperSection /> : null}
@@ -81,34 +105,172 @@ function TranscriptionSection() {
   const model = useModel();
   return (
     <Section title="Transcription">
-      <p className="text-sm text-fg-muted">
-        Transcription is tuned for English speech. Support for other languages needs a larger model
-        and is planned.
-      </p>
+      <div className="flex flex-col gap-5">
+        <LanguagePicker />
+        <QualityPicker />
 
-      <div className="flex flex-col gap-2 text-sm">
-        <span className="font-medium">Speech model</span>
-        {model.status === 'idle' ? (
-          <div className="flex flex-wrap items-center justify-between gap-3 rounded-md bg-surface-2 p-3">
-            <p className="text-fg-muted">
-              Not downloaded yet (about {model.approxDownloadMB} MB). It downloads automatically on
-              your first recording.
+        <div className="flex flex-col gap-2 text-sm">
+          <span className="font-medium">Speech model</span>
+          {model.status === 'idle' ? (
+            <div className="flex flex-wrap items-center justify-between gap-3 rounded-md bg-surface-2 p-3">
+              <p className="text-fg-muted">
+                Not downloaded yet (about {model.approxDownloadMB} MB). It downloads automatically
+                on your first recording.
+              </p>
+              <Button size="sm" variant="secondary" icon={CloudArrowDownIcon} onClick={loadModel}>
+                Download now
+              </Button>
+            </div>
+          ) : null}
+          {model.status === 'probing' ? (
+            <p className="text-fg-muted">Checking this device…</p>
+          ) : null}
+          <ModelProgressCard context="settings" />
+          <ModelReadyLine />
+          {model.status === 'ready' && model.device === 'wasm' ? (
+            <p className="text-xs text-fg-muted">
+              This browser has no WebGPU, so transcription uses the CPU and is slower.
             </p>
-            <Button size="sm" variant="secondary" icon={CloudArrowDownIcon} onClick={loadModel}>
-              Download now
-            </Button>
-          </div>
-        ) : null}
-        {model.status === 'probing' ? <p className="text-fg-muted">Checking this device…</p> : null}
-        <ModelProgressCard context="settings" />
-        <ModelReadyLine />
-        {model.status === 'ready' && model.device === 'wasm' ? (
-          <p className="text-xs text-fg-muted">
-            This browser has no WebGPU, so transcription uses the CPU and is slower.
-          </p>
-        ) : null}
+          ) : null}
+        </div>
       </div>
     </Section>
+  );
+}
+
+function LanguagePicker() {
+  const { language, quality } = useTranscriptionSettings();
+  const acc = useAccurateModel();
+  const languageName = LANGUAGES.find((l) => l.value === language)?.label ?? language;
+  const accurateOn = quality === 'accurate' && acc.status !== 'unsupported';
+  return (
+    <div className="flex flex-col gap-1.5 text-sm">
+      <label htmlFor="vn-language" className="font-medium">
+        Language you speak
+      </label>
+      <Select
+        id="vn-language"
+        value={language}
+        onChange={(next) => setTranscriptionSettings({ language: next })}
+        options={LANGUAGES}
+      />
+      {!needsAccurate(language) ? (
+        <p className="text-xs text-fg-muted text-pretty">
+          Notes are written in the language you pick here.
+        </p>
+      ) : accurateOn ? (
+        <p className="text-xs text-fg-muted text-pretty">
+          {languageName} uses the Accurate model. Expect some spelling mistakes; English is still
+          the most reliable.
+        </p>
+      ) : (
+        <div className="mt-1 flex items-start gap-2.5 rounded-md bg-surface-2 p-3 text-xs">
+          <WarningCircleIcon
+            aria-hidden="true"
+            weight="fill"
+            className="mt-px size-4 shrink-0 text-danger"
+          />
+          <div className="flex flex-col gap-2">
+            <p className="text-pretty">
+              {acc.status === 'unsupported'
+                ? `${languageName} needs the Accurate model, which this device cannot run. Transcripts will be mostly wrong.`
+                : `${languageName} needs the Accurate model. With Fast, transcripts are mostly wrong.`}
+            </p>
+            {acc.status !== 'unsupported' ? (
+              <div>
+                <Button
+                  size="sm"
+                  variant="secondary"
+                  onClick={() => {
+                    setTranscriptionSettings({ quality: 'accurate' });
+                    loadAccurateModel();
+                  }}
+                >
+                  Use Accurate
+                </Button>
+              </div>
+            ) : null}
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
+function QualityPicker() {
+  const { quality } = useTranscriptionSettings();
+  const acc = useAccurateModel();
+  if (acc.status === 'checking') return null;
+  if (acc.status === 'unsupported') {
+    return (
+      <div className="flex flex-col gap-1.5 text-sm">
+        <span className="font-medium">Quality</span>
+        <p className="text-xs text-fg-muted text-pretty">
+          Fast. The Accurate option needs a graphics chip with half-precision support (recent Chrome
+          or Edge on most laptops), which this device does not have.
+        </p>
+      </div>
+    );
+  }
+  return (
+    <div className="flex flex-col gap-2 text-sm">
+      <span className="font-medium" id="vn-quality-label">
+        Quality
+      </span>
+      <Segmented<Quality>
+        label="Transcription quality"
+        value={quality}
+        onChange={(next) => {
+          setTranscriptionSettings({ quality: next });
+          if (next === 'accurate') loadAccurateModel();
+        }}
+        options={[
+          { value: 'fast', label: 'Fast' },
+          { value: 'accurate', label: 'Accurate' },
+        ]}
+      />
+      <p className="text-xs text-fg-muted text-pretty">
+        {quality === 'fast'
+          ? `Fast uses the small model for everything. Accurate adds a larger model (about ${acc.approxDownloadMB} MB, downloaded once) that writes the final transcript after you stop; live text while you speak stays fast.`
+          : 'The larger model writes the final transcript after you stop, which takes a little longer. Use Transcribe again on older notes to redo them.'}
+      </p>
+      {quality === 'accurate' && acc.status === 'loading' ? (
+        <div className="flex flex-col gap-1.5">
+          <ProgressBar value={acc.percent} label="Accurate model download" />
+          <p className="tabular text-xs text-fg-muted" role="status">
+            {acc.cached ? 'Loading…' : `Downloading… ${Math.round(acc.percent)}%`}
+          </p>
+        </div>
+      ) : quality === 'accurate' && acc.status === 'ready' ? (
+        <p className="flex items-center gap-2 text-sm text-success" role="status">
+          <CheckCircleIcon aria-hidden="true" weight="fill" className="size-4.5" />
+          Accurate model ready
+        </p>
+      ) : quality === 'accurate' && acc.status === 'idle' ? (
+        <div className="flex flex-wrap items-center gap-3">
+          <p className="text-xs text-fg-muted">
+            Downloads the first time it is needed (about {acc.approxDownloadMB} MB).
+          </p>
+          <Button
+            size="sm"
+            variant="secondary"
+            icon={CloudArrowDownIcon}
+            onClick={loadAccurateModel}
+          >
+            Download now
+          </Button>
+        </div>
+      ) : quality === 'accurate' && acc.status === 'error' ? (
+        <div className="flex flex-wrap items-center gap-3">
+          <p className="text-xs text-danger">
+            The Accurate model could not load; the fast one is used meanwhile.
+          </p>
+          <Button size="sm" variant="secondary" onClick={loadAccurateModel}>
+            Try again
+          </Button>
+        </div>
+      ) : null}
+    </div>
   );
 }
 
@@ -166,6 +328,84 @@ function SearchSection() {
           <p className="text-xs text-fg-muted">Turning it off also deletes the search index.</p>
         </div>
       )}
+    </Section>
+  );
+}
+
+function ModelsSection({ open }: { open: boolean }) {
+  const toast = useToast();
+  const [models, setModels] = useState<CachedModel[] | null>(null);
+  const [confirmId, setConfirmId] = useState<string | null>(null);
+  const [version, setVersion] = useState(0);
+
+  useEffect(() => {
+    if (!open) return;
+    let cancelled = false;
+    void listCachedModels()
+      .then((list) => {
+        if (!cancelled) setModels(list);
+      })
+      .catch(() => {
+        if (!cancelled) setModels([]);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [open, version]);
+
+  async function remove(model: CachedModel) {
+    await deleteCachedModel(model.id);
+    if (model.id === ACCURATE_MODEL_ID) {
+      setTranscriptionSettings({ quality: 'fast' });
+      forgetAccurateDownload();
+    } else if (model.id === EMBED_MODEL_ID) {
+      await turnOffSearch();
+    }
+    setConfirmId(null);
+    setVersion((v) => v + 1);
+    toast.show({
+      message:
+        model.id === MODEL_ID
+          ? `Removed ${model.name}. It downloads again on your next recording.`
+          : `Removed ${model.name} (${formatBytes(model.bytes)})`,
+    });
+  }
+
+  if (!models || models.length === 0) return null;
+  return (
+    <Section title="Downloaded models">
+      <ul className="flex flex-col divide-y divide-border rounded-md border border-border">
+        {models.map((model) => (
+          <li key={model.id} className="flex items-center gap-3 px-3 py-2.5 text-sm">
+            <div className="min-w-0 flex-1">
+              <p className="font-medium">{model.name}</p>
+              <p className="truncate text-xs text-fg-muted">{model.purpose}</p>
+            </div>
+            <span className="tabular shrink-0 text-xs text-fg-muted">
+              {formatBytes(model.bytes)}
+            </span>
+            {model.removable ? (
+              <Button
+                size="sm"
+                variant={confirmId === model.id ? 'danger' : 'ghost'}
+                onBlur={() => setConfirmId((id) => (id === model.id ? null : id))}
+                onClick={() =>
+                  confirmId === model.id ? void remove(model) : setConfirmId(model.id)
+                }
+                aria-label={
+                  confirmId === model.id ? `Confirm delete ${model.name}` : `Delete ${model.name}`
+                }
+              >
+                {confirmId === model.id ? 'Confirm' : 'Delete'}
+              </Button>
+            ) : null}
+          </li>
+        ))}
+      </ul>
+      <p className="text-xs text-fg-muted text-pretty">
+        Models are stored by your browser, not inside your notes. Deleting one frees the space; it
+        downloads again when a feature needs it.
+      </p>
     </Section>
   );
 }
