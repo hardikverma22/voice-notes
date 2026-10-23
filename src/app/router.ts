@@ -1,9 +1,11 @@
 import { useEffect, useState } from 'react';
 
 /** t: seconds into the recording to play from, set by search results. */
-export type Route = { name: 'home' } | { name: 'note'; id: string; t: number | null };
+export type Route =
+  { name: 'home' } | { name: 'tasks' } | { name: 'note'; id: string; t: number | null };
 
 export function parseRoute(hash: string): Route {
+  if (hash === '#/tasks') return { name: 'tasks' };
   const match = /^#\/note\/([^?]+)(?:\?t=(\d+(?:\.\d+)?))?$/.exec(hash);
   if (!match?.[1]) return { name: 'home' };
   return { name: 'note', id: decodeURIComponent(match[1]), t: match[2] ? Number(match[2]) : null };

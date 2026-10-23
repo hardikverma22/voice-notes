@@ -56,6 +56,8 @@ browser's storage.
 - **Search by meaning** (opt-in): also finds notes that say it in other words, with the
   matching passage and a play-from-here time, plus related notes on each note. A 24 MB model
   runs on your device.
+- **Tasks:** every checklist item from every note on one page. Tick them off there or in the
+  note; it is the same item.
 - **Tags** on any note, with suggestions from tags you already use, and a filter by tag.
 - **Quick actions** on every note in the list (⋯ or right-click): rename, pin, copy, download
   audio, delete with Undo.
