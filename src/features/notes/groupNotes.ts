@@ -39,12 +39,19 @@ export function groupNotes(notes: Note[], now = Date.now()): NoteGroup[] {
   return [...groups].map(([label, list]) => ({ label, notes: list }));
 }
 
-/** Case-insensitive match on title and text. Every word of the query must appear. */
+/** Case-insensitive match on title, text, tags and bookmark labels. Every word must appear. */
 export function filterNotes(notes: Note[], query: string): Note[] {
   const words = query.toLowerCase().split(/\s+/).filter(Boolean);
   if (words.length === 0) return notes;
   return notes.filter((note) => {
-    const haystack = `${note.title}\n${note.plainText}`.toLowerCase();
+    const haystack = [
+      note.title,
+      note.plainText,
+      ...(note.tags ?? []).map((tag) => `#${tag}`),
+      ...(note.bookmarks ?? []).map((bookmark) => bookmark.label),
+    ]
+      .join('\n')
+      .toLowerCase();
     return words.every((word) => haystack.includes(word));
   });
 }

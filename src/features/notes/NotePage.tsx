@@ -14,6 +14,7 @@ import {
   DotsThreeIcon,
   DownloadSimpleIcon,
   FileTextIcon,
+  MicrophoneIcon,
   PushPinIcon,
   ShareNetworkIcon,
   TrashIcon,
@@ -23,14 +24,27 @@ import {
 import { formatDuration } from '../../lib/format';
 import { getAudio } from '../../storage/audio';
 import type { AudioRecord, Note } from '../../storage/db';
-import { deleteNote, getNote, restoreNote, setPinned } from '../../storage/notes';
+import {
+  addBookmark,
+  deleteNote,
+  getNote,
+  listNotes,
+  restoreNote,
+  setPinned,
+  setTags,
+} from '../../storage/notes';
+import { collectTags } from '../../lib/tags';
+import { useRecording } from '../recorder/recordingContext';
 import { extensionFor } from '../recorder/mime';
 import { ModelProgressCard } from '../transcribe/ModelIndicator';
 import { enqueueTranscription } from '../transcribe/transcriptionQueue';
 import { AudioPlayer } from './AudioPlayer';
+import { BookmarkList } from './Bookmarks';
 import { downloadBlob, downloadText, fileNameFor } from './exportNote';
 import NoteEditor, { type SaveStatus } from './NoteEditor';
+import { RecordMorePanel } from './RecordMorePanel';
 import { StatusBadge } from './StatusBadge';
+import { TagEditor } from './TagEditor';
 import { TranscriptView } from './TranscriptView';
 import { useAudioPlayer } from './useAudioPlayer';
 
@@ -60,6 +74,12 @@ function NoteView({ note }: { note: Note }) {
   const [tab, setTab] = useState<Tab>('note');
   const [audio, setAudio] = useState<AudioRecord | null>(null);
   const [clipUrl, setClipUrl] = useState<string | null>(null);
+  const [newBookmarkId, setNewBookmarkId] = useState<string | null>(null);
+  const rec = useRecording();
+  const allTags = useLiveQuery(
+    async () => collectTags(await listNotes()).map((entry) => entry.tag),
+    [],
+  );
 
   const audioId = note.audioId;
   useEffect(() => {
@@ -82,6 +102,18 @@ function NoteView({ note }: { note: Note }) {
 
   const player = useAudioPlayer(clipUrl, note.durationMs / 1000);
   const locked = note.status === 'queued' || note.status === 'transcribing';
+  const recorderBusy = rec.state !== 'idle' && rec.state !== 'error';
+  const recordingHere = recorderBusy && rec.targetNoteId === note.id;
+
+  async function bookmarkNow() {
+    const bookmark = await addBookmark(note.id, player.currentTime);
+    if (!bookmark) return;
+    setNewBookmarkId(bookmark.id);
+    toast.show({
+      message: `Marked ${formatDuration(bookmark.t * 1000)}`,
+      durationMs: 2000,
+    });
+  }
   const hasTimestamps = note.segments.some((segment) => segment.text.trim());
   const onEditor = useCallback((value: Editor | null) => setEditor(value), []);
 
@@ -191,6 +223,25 @@ function NoteView({ note }: { note: Note }) {
           <SaveIndicator status={saveStatus} />
         </div>
         <div className="flex items-center gap-0.5">
+          {!recordingHere ? (
+            <Button
+              size="sm"
+              variant="soft"
+              icon={MicrophoneIcon}
+              onClick={() => rec.startFor(note.id)}
+              disabled={recorderBusy || locked}
+              title={
+                locked
+                  ? 'Available once the transcript is finished'
+                  : recorderBusy
+                    ? 'Another recording is in progress'
+                    : 'Record more and add it to the end of this note'
+              }
+              className="mr-1"
+            >
+              Record more
+            </Button>
+          ) : null}
           <IconButton
             icon={PushPinIcon}
             label={note.pinned ? 'Unpin note' : 'Pin note'}
@@ -230,16 +281,41 @@ function NoteView({ note }: { note: Note }) {
               <StatusBadge status={note.status} showReady={false} />
             </p>
 
+            <TagEditor
+              tags={note.tags}
+              allTags={allTags ?? []}
+              onChange={(tags) => void setTags(note.id, tags)}
+            />
+
             <StatusPanel note={note} onRetry={retranscribe} />
 
-            {audio && clipUrl ? (
-              <AudioPlayer
-                player={player}
-                blob={audio.blob}
-                cacheKey={audio.id}
-                onDownload={downloadAudio}
-              />
-            ) : null}
+            <AnimatePresence initial={false} mode="popLayout">
+              {recordingHere ? (
+                <RecordMorePanel key="record-more" />
+              ) : audio && clipUrl ? (
+                <m.div
+                  key={`player-${audio.id}`}
+                  initial={{ opacity: 0 }}
+                  animate={{ opacity: 1 }}
+                  className="flex flex-col gap-3"
+                >
+                  <AudioPlayer
+                    player={player}
+                    blob={audio.blob}
+                    cacheKey={audio.id}
+                    onDownload={downloadAudio}
+                    bookmarks={note.bookmarks}
+                    onBookmark={() => void bookmarkNow()}
+                  />
+                  <BookmarkList
+                    noteId={note.id}
+                    bookmarks={note.bookmarks}
+                    player={player}
+                    newId={newBookmarkId}
+                  />
+                </m.div>
+              ) : null}
+            </AnimatePresence>
 
             {hasTimestamps ? (
               <div role="tablist" aria-label="View" className="flex gap-1 border-b border-border">

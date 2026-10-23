@@ -53,6 +53,9 @@ browser's storage.
 - **Instant search** across titles and text with highlighted matches
   (<kbd>⌘</kbd> <kbd>K</kbd> or <kbd>/</kbd>).
 - Filters for **Pinned** and **With audio**. Pin important notes to the top.
+- **Tags** on any note, with suggestions from tags you already use, and a filter by tag.
+- **Quick actions** on every note in the list (⋯ or right-click): rename, pin, copy, download
+  audio, delete with Undo.
 - Status badges show which notes are waiting, transcribing or failed.
 
 **Notes worth keeping**
@@ -74,7 +77,11 @@ browser's storage.
 - **Installable PWA** that works fully offline once loaded.
 - **Light and dark themes**, WCAG AA contrast checked in CI, keyboard-first, screen-reader
   labelled, and reduced-motion aware.
-- **Your data, portable:** text backup export and import, storage usage, delete everything.
+- **Marked moments:** press <kbd>M</kbd> (or tap Mark moment) while recording, or Mark in the
+  player, to save a point you can jump back to, with an optional label.
+- **Record more** onto the end of an existing note. Your edits stay; the new text is added after.
+- **Your data, portable:** one-file .zip backup with every note, tag and recording, and restore
+  that skips notes already present. Storage usage and delete everything.
 
 ## Screenshots
 
@@ -327,9 +334,10 @@ publishing. Any static host works: serve `dist/` over HTTPS.
 
 - [ ] Multilingual transcription with a larger model (for example Whisper Small) as an opt-in
       "Accurate" mode
-- [ ] Append a new recording to an existing note
-- [ ] Tags and folders
-- [ ] Full backup including audio (zip)
+- [x] Append a new recording to an existing note
+- [x] Tags (folders may follow)
+- [x] Full backup including audio (zip)
+- [ ] On-device semantic search across notes, with related notes
 - [ ] Optional end-to-end encrypted sync between your own devices
 
 ## Contributing

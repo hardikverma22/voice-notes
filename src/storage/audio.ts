@@ -67,3 +67,24 @@ export async function estimateUsage(): Promise<{ usage: number; quota: number } 
 export function getAudioForNote(noteId: string, database = db): Promise<AudioRecord | undefined> {
   return database.audio.where('noteId').equals(noteId).first();
 }
+
+/** Swaps every audio record of a note for one new record, in one transaction. */
+export async function replaceNoteAudio(
+  noteId: string,
+  blob: Blob,
+  database = db,
+): Promise<AudioRecord> {
+  const record: AudioRecord = {
+    id: crypto.randomUUID(),
+    noteId,
+    blob,
+    mimeType: blob.type || 'audio/wav',
+    sizeBytes: blob.size,
+    createdAt: Date.now(),
+  };
+  await database.transaction('rw', database.audio, async () => {
+    await database.audio.where('noteId').equals(noteId).delete();
+    await database.audio.add(record);
+  });
+  return record;
+}

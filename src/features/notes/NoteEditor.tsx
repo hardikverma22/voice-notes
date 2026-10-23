@@ -135,6 +135,15 @@ export default function NoteEditor({
     };
   }, [save]);
 
+  // A rename from the library arrives as a new note.title; take it unless the person is
+  // typing the title here (then the stored value is just their own save catching up).
+  useEffect(() => {
+    if (note.title === titleRef.current) return;
+    if (document.activeElement === titleInputRef.current) return;
+    titleRef.current = note.title;
+    setTitle(note.title);
+  }, [note.title]);
+
   // Auto-grow the title field; focus it for a brand-new empty note.
   useEffect(() => {
     const el = titleInputRef.current;

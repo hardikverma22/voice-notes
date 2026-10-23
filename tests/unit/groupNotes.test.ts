@@ -22,6 +22,9 @@ function note(id: string, createdAt: number, extra: Partial<Note> = {}): Note {
     pinned: false,
     status: 'ready',
     autoTitle: false,
+    tags: [],
+    bookmarks: [],
+    pendingAppend: null,
     ...extra,
   };
 }

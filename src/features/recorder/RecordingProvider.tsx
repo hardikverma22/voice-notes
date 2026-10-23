@@ -6,23 +6,34 @@ import {
   appendChunk,
   discardSession,
   finalizeSession,
+  getAudio,
   listOrphanSessions,
+  replaceNoteAudio,
 } from '../../storage/audio';
-import { createNote, setNoteAudio } from '../../storage/notes';
+import type { Bookmark } from '../../storage/db';
+import { createNote, getNote, setNoteAudio, startAppend } from '../../storage/notes';
 import { titleFromTranscript } from '../notes/title';
 import { transcriptToDoc } from '../notes/transcriptToDoc';
-import { LANGUAGE, MODEL_ID } from '../transcribe/config';
+import { LANGUAGE, MODEL_ID, SAMPLE_RATE } from '../transcribe/config';
 import { displayText } from '../transcribe/merge';
 import { getModelState, loadModel, transcribe } from '../transcribe/modelStore';
 import { enqueueTranscription, resumeUnfinished } from '../transcribe/transcriptionQueue';
 import { useLiveTranscript } from '../transcribe/useLiveTranscript';
+import { decodeToPcm16k } from './decode';
 import { RecordingContext, type RecordingContextValue } from './recordingContext';
 import { useRecorder, type RecordingResult } from './useRecorder';
+import { concatPcm, encodeWav } from './wav';
+
+function toBookmarks(marks: number[], offsetSec: number): Bookmark[] {
+  const createdAt = Date.now();
+  return marks.map((t) => ({ id: crypto.randomUUID(), t: t + offsetSec, label: '', createdAt }));
+}
 
 /**
  * Owns the microphone for the whole app, so a recording keeps going while the person
  * browses notes. A stopped recording is saved as a note straight away; the accurate
- * transcript is filled in by the transcription queue afterwards.
+ * transcript is filled in by the transcription queue afterwards. A recording started from a
+ * note (startFor) is added to the end of that note instead.
  */
 export function RecordingProvider({ children }: { children: ReactNode }) {
   const toast = useToast();
@@ -31,17 +42,70 @@ export function RecordingProvider({ children }: { children: ReactNode }) {
   const sessionRef = useRef<string | null>(null);
   const persistAskedRef = useRef(false);
   const [lastSavedId, setLastSavedId] = useState<string | null>(null);
+  const [targetNoteId, setTargetNoteId] = useState<string | null>(null);
+  const targetRef = useRef<string | null>(null);
+  const pendingTargetRef = useRef<string | null>(null);
+  const marksRef = useRef<number[]>([]);
+  const [markCount, setMarkCount] = useState(0);
+  const elapsedRef = useRef(0);
 
   useEffect(() => {
     liveRef.current = live;
   });
 
+  /** Merges the new audio onto the note's audio. False means it could not, so save it as new. */
+  const appendTo = useCallback(
+    async (
+      noteId: string,
+      sessionId: string | null,
+      result: RecordingResult,
+      marks: number[],
+    ): Promise<boolean> => {
+      try {
+        const note = await getNote(noteId);
+        if (!note) return false;
+        const previousAudio = note.audioId ? await getAudio(note.audioId) : undefined;
+        const previous = previousAudio
+          ? await decodeToPcm16k(previousAudio.blob)
+          : new Float32Array(0);
+        const offsetSec = previous.length / SAMPLE_RATE;
+        const merged = concatPcm([previous, result.pcm]);
+        const record = await replaceNoteAudio(noteId, encodeWav(merged, SAMPLE_RATE));
+        await startAppend(noteId, {
+          audioId: record.id,
+          durationMs: Math.round((merged.length / SAMPLE_RATE) * 1000),
+          offsetSec,
+          bookmarks: toBookmarks(marks, offsetSec),
+        });
+        if (sessionId) await discardSession(sessionId);
+        enqueueTranscription(noteId, result.pcm);
+        toast.show({ tone: 'success', message: 'Added to this note', durationMs: 3000 });
+        return true;
+      } catch (error) {
+        console.error('Could not add the recording to the note', error);
+        toast.show({
+          tone: 'error',
+          message: 'Could not add it to that note, so it was saved as a new note.',
+        });
+        return false;
+      }
+    },
+    [toast],
+  );
+
   const save = useCallback(
     async (result: RecordingResult) => {
       const sessionId = sessionRef.current;
       sessionRef.current = null;
+      const target = targetRef.current;
+      targetRef.current = null;
+      setTargetNoteId(null);
+      const marks = marksRef.current;
+      marksRef.current = [];
+      setMarkCount(0);
       const { committed, tentative } = displayText(liveRef.current.state);
       liveRef.current.stop();
+      if (target && (await appendTo(target, sessionId, result, marks))) return;
       const draft = [committed, tentative].filter(Boolean).join(' ');
       const createdAt = Date.now();
       try {
@@ -59,6 +123,7 @@ export function RecordingProvider({ children }: { children: ReactNode }) {
           modelId: MODEL_ID,
           device: getModelState().device ?? 'wasm',
           status: 'queued',
+          bookmarks: toBookmarks(marks, 0),
         });
         if (sessionId) {
           const audio = await finalizeSession(sessionId, note.id);
@@ -85,12 +150,17 @@ export function RecordingProvider({ children }: { children: ReactNode }) {
         });
       }
     },
-    [toast],
+    [toast, appendTo],
   );
 
   const recorder = useRecorder({
     onStarted: (getPcm) => {
       sessionRef.current = crypto.randomUUID();
+      targetRef.current = pendingTargetRef.current;
+      pendingTargetRef.current = null;
+      setTargetNoteId(targetRef.current);
+      marksRef.current = [];
+      setMarkCount(0);
       setLastSavedId(null);
       // The speech model downloads on first use; live text appears once it is ready.
       loadModel();
@@ -108,6 +178,10 @@ export function RecordingProvider({ children }: { children: ReactNode }) {
     onCancelled: () => {
       const sessionId = sessionRef.current;
       sessionRef.current = null;
+      targetRef.current = null;
+      setTargetNoteId(null);
+      marksRef.current = [];
+      setMarkCount(0);
       liveRef.current.stop();
       if (sessionId) void discardSession(sessionId);
       toast.show({ message: 'Recording discarded' });
@@ -115,8 +189,15 @@ export function RecordingProvider({ children }: { children: ReactNode }) {
   });
 
   useRecoverOrphans();
+  useMarkShortcut(recorder.state === 'recording' || recorder.state === 'paused', () => {
+    marksRef.current.push(elapsedRef.current / 1000);
+    setMarkCount(marksRef.current.length);
+  });
 
   const { state, elapsedMs, analyser, error, start, stop, pause, resume, cancel } = recorder;
+  useEffect(() => {
+    elapsedRef.current = elapsedMs;
+  });
 
   const value = useMemo<RecordingContextValue>(
     () => ({
@@ -126,14 +207,32 @@ export function RecordingProvider({ children }: { children: ReactNode }) {
       errorCode: error?.code ?? null,
       live: live.state,
       lastSavedId,
-      start: () => void start(),
+      targetNoteId,
+      markCount,
+      start: () => {
+        pendingTargetRef.current = null;
+        void start();
+      },
+      startFor: (noteId) => {
+        if (state !== 'idle' && state !== 'error') return;
+        pendingTargetRef.current = noteId;
+        void start();
+      },
+      mark: () => {
+        if (state !== 'recording' && state !== 'paused') return;
+        marksRef.current.push(elapsedRef.current / 1000);
+        setMarkCount(marksRef.current.length);
+      },
       stop: () => void stop(),
       pause,
       resume,
       discard: () => void cancel(),
       toggle: () => {
         if (state === 'recording' || state === 'paused') void stop();
-        else if (state === 'idle' || state === 'error') void start();
+        else if (state === 'idle' || state === 'error') {
+          pendingTargetRef.current = null;
+          void start();
+        }
       },
       dismissSaved: () => setLastSavedId(null),
     }),
@@ -144,6 +243,8 @@ export function RecordingProvider({ children }: { children: ReactNode }) {
       error,
       live.state,
       lastSavedId,
+      targetNoteId,
+      markCount,
       start,
       stop,
       pause,
@@ -153,6 +254,29 @@ export function RecordingProvider({ children }: { children: ReactNode }) {
   );
 
   return <RecordingContext.Provider value={value}>{children}</RecordingContext.Provider>;
+}
+
+const TYPING_SELECTOR = 'input, textarea, select, [contenteditable], [role="textbox"]';
+
+/** M marks the current moment while recording, unless the person is typing. */
+function useMarkShortcut(enabled: boolean, onMark: () => void) {
+  const callbackRef = useRef(onMark);
+  useEffect(() => {
+    callbackRef.current = onMark;
+  });
+  useEffect(() => {
+    if (!enabled) return;
+    const handler = (event: KeyboardEvent) => {
+      if (event.code !== 'KeyM' || event.repeat || event.metaKey || event.ctrlKey || event.altKey)
+        return;
+      const target = event.target as Element | null;
+      if (target?.closest?.(TYPING_SELECTOR)) return;
+      event.preventDefault();
+      callbackRef.current();
+    };
+    document.addEventListener('keydown', handler);
+    return () => document.removeEventListener('keydown', handler);
+  }, [enabled]);
 }
 
 /**

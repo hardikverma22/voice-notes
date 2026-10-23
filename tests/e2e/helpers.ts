@@ -71,6 +71,9 @@ export async function seedNote(page: Page): Promise<void> {
         pinned: false,
         status: 'ready',
         autoTitle: false,
+        tags: [],
+        bookmarks: [],
+        pendingAppend: null,
       });
       tx.oncomplete = () => resolve();
       tx.onerror = () => reject(tx.error);

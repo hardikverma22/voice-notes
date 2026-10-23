@@ -15,6 +15,7 @@ import {
 import { formatDuration } from '../../lib/format';
 import { getNote } from '../../storage/notes';
 import { NotesLibrary } from '../notes/NotesLibrary';
+import { MarkButton } from '../notes/RecordMorePanel';
 import { StatusBadge } from '../notes/StatusBadge';
 import { RecordButton } from '../recorder/RecordButton';
 import { useRecording } from '../recorder/recordingContext';
@@ -153,11 +154,35 @@ export default function HomePage() {
           {rec.state === 'requesting'
             ? 'Starting microphone…'
             : active
-              ? paused
-                ? 'Tap the button to save, or resume'
-                : 'Tap to stop and save'
+              ? rec.targetNoteId
+                ? 'Tap to stop and add it to the note'
+                : paused
+                  ? 'Tap the button to save, or resume'
+                  : 'Tap to stop and save'
               : 'Tap to record'}
         </p>
+
+        <AnimatePresence initial={false}>
+          {active ? (
+            <m.div
+              key="mark"
+              initial={{ opacity: 0, y: 6 }}
+              animate={{ opacity: 1, y: 0 }}
+              exit={{ opacity: 0, transition: { duration: 0.12 } }}
+              className="mt-4 flex flex-col items-center gap-1.5"
+            >
+              <MarkButton
+                variant="roomy"
+                count={rec.markCount}
+                onMark={rec.mark}
+                disabled={rec.state === 'stopping'}
+              />
+              <p className="hidden items-center gap-1.5 text-xs text-fg-muted sm:flex">
+                <Kbd>M</Kbd> marks a moment to find later
+              </p>
+            </m.div>
+          ) : null}
+        </AnimatePresence>
 
         {rec.errorCode ? (
           <p role="alert" className="mt-3 max-w-sm text-sm text-danger">
