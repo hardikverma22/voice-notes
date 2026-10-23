@@ -39,6 +39,9 @@ export default defineConfig({
         globPatterns: ['**/*.{js,css,html,png,svg,woff2}'],
         navigateFallback: 'index.html',
         cleanupOutdatedCaches: true,
+        // In prompt mode the plugin leaves this off. Without it the new worker never claims the
+        // open page after Reload, so no controllerchange fires and the page never reloads.
+        clientsClaim: true,
       },
     }),
   ],
