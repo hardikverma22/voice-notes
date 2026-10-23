@@ -113,10 +113,7 @@ export function Layout({ route, children }: { route: Route; children: ReactNode 
         </aside>
 
         <div className="flex min-h-dvh min-w-0 flex-col">
-          <header
-            className="sticky top-0 z-30 flex h-14 items-center justify-between gap-2 border-b border-border/70 bg-bg/80 px-4 backdrop-blur-md lg:static lg:h-auto lg:border-0 lg:bg-transparent lg:px-6 lg:pt-4 lg:backdrop-blur-none"
-            style={{ paddingTop: 'max(0px, env(safe-area-inset-top))' }}
-          >
+          <header className="sticky top-0 z-30 flex h-14 items-center justify-between gap-2 border-b border-border/70 bg-bg/80 px-4 pt-[env(safe-area-inset-top)] backdrop-blur-md lg:static lg:h-auto lg:border-0 lg:bg-transparent lg:px-6 lg:pt-[max(1rem,env(safe-area-inset-top))] lg:backdrop-blur-none">
             <div className="flex items-center gap-2 lg:invisible">
               <Brand />
             </div>

@@ -1,7 +1,8 @@
-import { m } from 'motion/react';
+import { AnimatePresence, m } from 'motion/react';
 import { useEffect, useRef, useState } from 'react';
 import { IconButton } from '../../design/components/Button';
 import {
+  BookmarkSimpleIcon,
   ClockClockwiseIcon,
   ClockCounterClockwiseIcon,
   DownloadSimpleIcon,
@@ -9,23 +10,33 @@ import {
   PlayIcon,
 } from '../../design/icons';
 import { formatDuration } from '../../lib/format';
+import type { Bookmark } from '../../storage/db';
 import { computePeaks, decodeToPcm16k } from '../recorder/decode';
 import type { AudioPlayer as Player } from './useAudioPlayer';
 
 const BARS = 96;
 const peakCache = new Map<string, number[]>();
 
-/** Static waveform of the recording, filled up to the play position. Click or drag to seek. */
+/**
+ * Static waveform of the recording, filled up to the play position. Click or drag to seek.
+ * Marked moments sit as pins above the waveform; the list below the player is their keyboard
+ * path.
+ */
 export function AudioPlayer({
   player,
   blob,
   cacheKey,
   onDownload,
+  bookmarks = [],
+  onBookmark,
 }: {
   player: Player;
   blob: Blob;
   cacheKey: string;
   onDownload: () => void;
+  bookmarks?: Bookmark[];
+  /** Marks the current play position. */
+  onBookmark?: () => void;
 }) {
   const [peaks, setPeaks] = useState<number[] | null>(() => peakCache.get(cacheKey) ?? null);
   const trackRef = useRef<HTMLDivElement>(null);
@@ -74,7 +85,35 @@ export function AudioPlayer({
           )}
         </m.button>
 
-        <div className="min-w-0 flex-1">
+        <div className="relative min-w-0 flex-1">
+          {player.duration > 0 && bookmarks.length > 0 ? (
+            <div aria-hidden="true" className="pointer-events-none absolute inset-x-0 -top-2.5 h-3">
+              <AnimatePresence initial={false}>
+                {bookmarks.map((bookmark) => {
+                  const at = Math.min(1, bookmark.t / player.duration);
+                  return (
+                    <m.button
+                      key={bookmark.id}
+                      type="button"
+                      tabIndex={-1}
+                      title={`${formatDuration(bookmark.t * 1000)}${bookmark.label ? ` · ${bookmark.label}` : ''}`}
+                      onClick={() => {
+                        player.seek(bookmark.t);
+                        player.play();
+                      }}
+                      initial={{ opacity: 0, y: -8, scale: 0.4 }}
+                      animate={{ opacity: 1, y: 0, scale: 1 }}
+                      exit={{ opacity: 0, scale: 0.4, transition: { duration: 0.12 } }}
+                      className="pointer-events-auto absolute top-0 flex h-full w-5 -translate-x-1/2 cursor-pointer justify-center"
+                      style={{ left: `${at * 100}%` }}
+                    >
+                      <span className="size-2 rotate-45 rounded-[2px] bg-accent shadow-sm ring-2 ring-surface" />
+                    </m.button>
+                  );
+                })}
+              </AnimatePresence>
+            </div>
+          ) : null}
           <div
             ref={trackRef}
             role="slider"
@@ -152,6 +191,17 @@ export function AudioPlayer({
           >
             {player.rate}×
           </button>
+          {onBookmark ? (
+            <button
+              type="button"
+              onClick={onBookmark}
+              title="Mark this moment so you can jump back to it"
+              className="ml-1 inline-flex min-h-9 items-center gap-1.5 rounded-full border border-border px-3 text-xs font-medium text-fg-muted transition-[background-color,color,transform] duration-(--vn-dur-fast) hover:bg-surface-2 hover:text-fg active:scale-[0.96] focus-visible:outline-2 focus-visible:outline-focus"
+            >
+              <BookmarkSimpleIcon aria-hidden="true" className="size-4" />
+              Mark <span className="tabular">{formatDuration(player.currentTime * 1000)}</span>
+            </button>
+          ) : null}
         </div>
         <IconButton
           icon={DownloadSimpleIcon}

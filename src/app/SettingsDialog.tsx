@@ -14,11 +14,11 @@ import {
   TrashIcon,
   UploadSimpleIcon,
 } from '../design/icons';
-import { downloadText } from '../features/notes/exportNote';
+import { downloadBlob } from '../features/notes/exportNote';
 import { ModelProgressCard, ModelReadyLine } from '../features/transcribe/ModelIndicator';
 import { loadModel, useModel } from '../features/transcribe/modelStore';
 import { formatBytes } from '../lib/format';
-import { deleteAllNotes, exportBackup, importBackup } from '../storage/notes';
+import { deleteAllNotes } from '../storage/notes';
 import { navigate } from './router';
 import { getTheme, setTheme, type Theme } from './theme';
 import { useStorageEstimate } from './useStorageEstimate';
@@ -111,20 +111,42 @@ function DataSection({ open }: { open: boolean }) {
   const [version, setVersion] = useState(0);
   const estimate = useStorageEstimate(`${open}-${version}`);
   const [confirmDelete, setConfirmDelete] = useState(false);
+  const [busy, setBusy] = useState<'export' | 'import' | null>(null);
   const fileRef = useRef<HTMLInputElement>(null);
 
   async function backup() {
-    const json = await exportBackup();
-    const stamp = new Date().toISOString().slice(0, 10);
-    downloadText(`voice-notes-backup-${stamp}.json`, json, 'application/json');
+    setBusy('export');
+    try {
+      const { exportZipBackup } = await import('../storage/backup');
+      const { blob, notes, recordings } = await exportZipBackup();
+      const stamp = new Date().toISOString().slice(0, 10);
+      downloadBlob(`voice-notes-backup-${stamp}.zip`, blob);
+      toast.show({
+        tone: 'success',
+        message: `Backed up ${plural(notes, 'note')} and ${plural(recordings, 'recording')} (${formatBytes(blob.size)})`,
+      });
+    } catch (error) {
+      console.error('Backup failed', error);
+      toast.show({
+        tone: 'error',
+        message: 'The backup could not be made. Free some space on this device and try again.',
+      });
+    } finally {
+      setBusy(null);
+    }
   }
 
   async function restore(file: File) {
+    setBusy('import');
     try {
-      const added = await importBackup(await file.text());
+      const { importAnyBackup } = await import('../storage/backup');
+      const { notes, recordings } = await importAnyBackup(file);
       toast.show({
         tone: 'success',
-        message: `Imported ${added} ${added === 1 ? 'note' : 'notes'}`,
+        message:
+          notes === 0
+            ? 'Nothing new to import. Those notes are already here.'
+            : `Imported ${plural(notes, 'note')}${recordings ? ` with ${plural(recordings, 'recording')}` : ''}`,
       });
       setVersion((v) => v + 1);
     } catch (error) {
@@ -132,6 +154,8 @@ function DataSection({ open }: { open: boolean }) {
         tone: 'error',
         message: error instanceof Error ? error.message : 'Import failed',
       });
+    } finally {
+      setBusy(null);
     }
   }
 
@@ -155,21 +179,25 @@ function DataSection({ open }: { open: boolean }) {
           variant="secondary"
           icon={DownloadSimpleIcon}
           onClick={() => void backup()}
+          disabled={busy !== null}
+          aria-busy={busy === 'export'}
         >
-          Export backup
+          {busy === 'export' ? 'Packing backup…' : 'Export backup'}
         </Button>
         <Button
           size="sm"
           variant="secondary"
           icon={UploadSimpleIcon}
           onClick={() => fileRef.current?.click()}
+          disabled={busy !== null}
+          aria-busy={busy === 'import'}
         >
-          Import backup
+          {busy === 'import' ? 'Importing…' : 'Import backup'}
         </Button>
         <input
           ref={fileRef}
           type="file"
-          accept="application/json,.json"
+          accept=".zip,application/zip,.json,application/json"
           className="hidden"
           onChange={(event) => {
             const file = event.target.files?.[0];
@@ -178,7 +206,10 @@ function DataSection({ open }: { open: boolean }) {
           }}
         />
       </div>
-      <p className="text-xs text-fg-muted">Backups contain text only, not audio.</p>
+      <p className="text-xs text-fg-muted text-pretty">
+        A backup is one .zip file with every note, tag, bookmark and recording. Importing skips
+        notes that are already here. Older text-only .json backups still import.
+      </p>
       <div>
         <Button
           size="sm"
@@ -205,9 +236,14 @@ function DataSection({ open }: { open: boolean }) {
   );
 }
 
+function plural(count: number, word: string): string {
+  return `${count} ${word}${count === 1 ? '' : 's'}`;
+}
+
 function ShortcutsSection() {
   const rows: [ReactNode, string][] = [
     [<Kbd key="s">Space</Kbd>, 'Start or stop recording (home)'],
+    [<Kbd key="m">M</Kbd>, 'Mark a moment while recording'],
     [
       <span key="k" className="inline-flex gap-1">
         <Kbd>⌘</Kbd>

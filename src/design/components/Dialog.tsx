@@ -7,6 +7,13 @@ import { IconButton } from './Button';
 const FOCUSABLE =
   'a[href], button:not([disabled]), input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])';
 
+// Last input type, so focus moved by the dialog only shows a ring for keyboard users.
+let lastInputWasPointer = false;
+if (typeof document !== 'undefined') {
+  document.addEventListener('pointerdown', () => (lastInputWasPointer = true), true);
+  document.addEventListener('keydown', () => (lastInputWasPointer = false), true);
+}
+
 /** Modal dialog: bottom sheet on phones, centred card on larger screens. Traps focus. */
 export function Dialog({
   open,
@@ -32,11 +39,13 @@ export function Dialog({
     const previousOverflow = document.body.style.overflow;
     document.body.style.overflow = 'hidden';
     requestAnimationFrame(() => {
-      panelRef.current?.querySelector<HTMLElement>(FOCUSABLE)?.focus();
+      panelRef.current
+        ?.querySelector<HTMLElement>(FOCUSABLE)
+        ?.focus({ focusVisible: !lastInputWasPointer } as FocusOptions);
     });
     return () => {
       document.body.style.overflow = previousOverflow;
-      returnFocusRef.current?.focus?.();
+      returnFocusRef.current?.focus?.({ focusVisible: !lastInputWasPointer } as FocusOptions);
     };
   }, [open]);
 

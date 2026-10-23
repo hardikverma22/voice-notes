@@ -7,6 +7,14 @@ import type { Segment } from '../features/transcribe/protocol';
  */
 export type NoteStatus = 'ready' | 'queued' | 'transcribing' | 'failed';
 
+/** A moment in the recording the person marked, in seconds from the start of the audio. */
+export interface Bookmark {
+  id: string;
+  t: number;
+  label: string;
+  createdAt: number;
+}
+
 export interface Note {
   id: string; // crypto.randomUUID()
   title: string;
@@ -24,6 +32,13 @@ export interface Note {
   status: NoteStatus;
   /** True while the title is still the generated one, so a transcript may replace it. */
   autoTitle: boolean;
+  tags: string[];
+  bookmarks: Bookmark[];
+  /**
+   * Set while a recording added to this note waits for its transcript. offsetSec is where the
+   * added audio starts, so only that part is transcribed and appended to the existing text.
+   */
+  pendingAppend: { offsetSec: number } | null;
 }
 export interface AudioRecord {
   id: string;
@@ -67,6 +82,22 @@ export class VoiceNotesDB extends Dexie {
             note.pinned ??= false;
             note.status ??= 'ready';
             note.autoTitle ??= false;
+          }),
+      );
+    this.version(3)
+      .stores({
+        notes: 'id, createdAt, updatedAt, status, *tags',
+        audio: 'id, noteId',
+        audioChunks: '++seq, sessionId, [sessionId+index]',
+      })
+      .upgrade((tx) =>
+        tx
+          .table('notes')
+          .toCollection()
+          .modify((note: Partial<Note>) => {
+            note.tags ??= [];
+            note.bookmarks ??= [];
+            note.pendingAppend ??= null;
           }),
       );
   }

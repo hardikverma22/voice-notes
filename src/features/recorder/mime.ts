@@ -19,11 +19,12 @@ export function pickMimeType(
   return undefined;
 }
 
-export type AudioExtension = 'webm' | 'm4a' | 'ogg' | 'audio';
+export type AudioExtension = 'webm' | 'm4a' | 'ogg' | 'wav' | 'audio';
 
 export function extensionFor(mime: string): AudioExtension {
   if (mime.startsWith('audio/webm')) return 'webm';
   if (mime.startsWith('audio/mp4')) return 'm4a';
   if (mime.startsWith('audio/ogg')) return 'ogg';
+  if (mime.startsWith('audio/wav') || mime.startsWith('audio/x-wav')) return 'wav';
   return 'audio';
 }

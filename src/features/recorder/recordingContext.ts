@@ -11,7 +11,15 @@ export interface RecordingContextValue {
   live: LiveState;
   /** The note saved by the last recording in this visit, for the confirmation card. */
   lastSavedId: string | null;
+  /** The note this recording will be added to, or null for a new note. */
+  targetNoteId: string | null;
+  /** Moments marked during this recording; they become bookmarks. */
+  markCount: number;
   start(): void;
+  /** Records more audio onto the end of an existing note. */
+  startFor(noteId: string): void;
+  /** Marks the current moment of the recording. */
+  mark(): void;
   stop(): void;
   pause(): void;
   resume(): void;

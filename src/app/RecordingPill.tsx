@@ -2,12 +2,15 @@ import { AnimatePresence, m } from 'motion/react';
 import { PauseIcon, PlayIcon } from '../design/icons';
 import { useRecording } from '../features/recorder/recordingContext';
 import { formatDuration } from '../lib/format';
-import { navigate } from './router';
+import { navigate, useHashRoute } from './router';
 
 /** Floating control shown on other pages while a recording is running. */
 export function RecordingPill({ visible }: { visible: boolean }) {
   const rec = useRecording();
-  const active = rec.state === 'recording' || rec.state === 'paused';
+  const route = useHashRoute();
+  // The note being added to shows its own recording panel.
+  const onTarget = route.name === 'note' && route.id === rec.targetNoteId;
+  const active = (rec.state === 'recording' || rec.state === 'paused') && !onTarget;
   const paused = rec.state === 'paused';
   return (
     <AnimatePresence>
@@ -21,7 +24,7 @@ export function RecordingPill({ visible }: { visible: boolean }) {
         >
           <button
             type="button"
-            onClick={() => navigate('/')}
+            onClick={() => navigate(rec.targetNoteId ? `/note/${rec.targetNoteId}` : '/')}
             className="flex min-h-10 items-center gap-2 rounded-full pr-2 pl-3 text-sm font-medium hover:bg-surface-2 focus-visible:outline-2 focus-visible:outline-focus"
             aria-label={`${paused ? 'Paused' : 'Recording'} ${formatDuration(rec.elapsedMs)}. Open recorder`}
           >
