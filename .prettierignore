@@ -8,3 +8,8 @@ tests/fixtures
 public/icons
 design-system
 .impeccable/
+
+# Locally installed agent skills and their working output
+.agents/
+.taste-skill/
+skills-lock.json
