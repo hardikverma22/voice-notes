@@ -22,7 +22,11 @@ export function Segmented<T extends string>({
 }) {
   const id = useId();
   return (
-    <div role="radiogroup" aria-label={label} className="inline-flex rounded-full bg-surface-2 p-1">
+    <div
+      role="radiogroup"
+      aria-label={label}
+      className="inline-flex self-start rounded-full bg-surface-2 p-1"
+    >
       {options.map((option) => {
         const selected = option.value === value;
         const IconComponent = option.icon;

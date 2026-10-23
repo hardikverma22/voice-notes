@@ -2,17 +2,11 @@ import { AnimatePresence, m } from 'motion/react';
 import { useEffect, useId, useRef, type ReactNode } from 'react';
 import { createPortal } from 'react-dom';
 import { XIcon } from '../icons';
+import { lastInputWasPointer } from '../inputModality';
 import { IconButton } from './Button';
 
 const FOCUSABLE =
   'a[href], button:not([disabled]), input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])';
-
-// Last input type, so focus moved by the dialog only shows a ring for keyboard users.
-let lastInputWasPointer = false;
-if (typeof document !== 'undefined') {
-  document.addEventListener('pointerdown', () => (lastInputWasPointer = true), true);
-  document.addEventListener('keydown', () => (lastInputWasPointer = false), true);
-}
 
 /** Modal dialog: bottom sheet on phones, centred card on larger screens. Traps focus. */
 export function Dialog({
@@ -38,14 +32,17 @@ export function Dialog({
     returnFocusRef.current = document.activeElement as HTMLElement | null;
     const previousOverflow = document.body.style.overflow;
     document.body.style.overflow = 'hidden';
+    // Keyboard: focus the first control, as before. Pointer: focus the panel itself, so no focus
+    // ring appears on the close button (browsers may still show one for script focus).
+    const openedByPointer = lastInputWasPointer();
     requestAnimationFrame(() => {
-      panelRef.current
-        ?.querySelector<HTMLElement>(FOCUSABLE)
-        ?.focus({ focusVisible: !lastInputWasPointer } as FocusOptions);
+      if (openedByPointer) panelRef.current?.focus({ preventScroll: true });
+      else panelRef.current?.querySelector<HTMLElement>(FOCUSABLE)?.focus();
     });
     return () => {
       document.body.style.overflow = previousOverflow;
-      returnFocusRef.current?.focus?.({ focusVisible: !lastInputWasPointer } as FocusOptions);
+      // Return focus for keyboard users; after a click there is nothing to return to visibly.
+      if (!lastInputWasPointer()) returnFocusRef.current?.focus?.();
     };
   }, [open]);
 
@@ -82,6 +79,7 @@ export function Dialog({
           />
           <m.div
             ref={panelRef}
+            tabIndex={-1}
             role="dialog"
             aria-modal="true"
             aria-labelledby={titleId}
@@ -90,7 +88,7 @@ export function Dialog({
             initial={{ opacity: 0, y: 32, scale: 0.98 }}
             animate={{ opacity: 1, y: 0, scale: 1 }}
             exit={{ opacity: 0, y: 24, transition: { duration: 0.16 } }}
-            className="vn-scroll relative flex max-h-[88dvh] w-full flex-col overflow-y-auto rounded-t-lg border border-border bg-surface shadow-lg sm:max-w-lg sm:rounded-lg"
+            className="vn-scroll relative flex max-h-[88dvh] outline-none w-full flex-col overflow-y-auto rounded-t-lg border border-border bg-surface shadow-lg sm:max-w-lg sm:rounded-lg"
             style={{ paddingBottom: 'env(safe-area-inset-bottom)' }}
           >
             <div className="sticky top-0 z-10 flex items-start justify-between gap-4 bg-surface px-6 pt-5 pb-3">

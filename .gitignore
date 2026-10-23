@@ -11,3 +11,8 @@ tests/fixtures/*.wav
 # local tool config
 .claude/
 .impeccable/
+
+# Locally installed agent skills (design-taste-frontend) and their working output
+.agents/
+.taste-skill/
+skills-lock.json

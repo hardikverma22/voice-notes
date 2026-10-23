@@ -14,7 +14,8 @@ import type { Bookmark } from '../../storage/db';
 import { createNote, getNote, setNoteAudio, startAppend } from '../../storage/notes';
 import { titleFromTranscript } from '../notes/title';
 import { transcriptToDoc } from '../notes/transcriptToDoc';
-import { LANGUAGE, MODEL_ID, SAMPLE_RATE } from '../transcribe/config';
+import { MODEL_ID, SAMPLE_RATE } from '../transcribe/config';
+import { getTranscriptionSettings } from '../transcribe/settings';
 import { displayText } from '../transcribe/merge';
 import { getModelState, loadModel, transcribe } from '../transcribe/modelStore';
 import { enqueueTranscription, resumeUnfinished } from '../transcribe/transcriptionQueue';
@@ -119,7 +120,7 @@ export function RecordingProvider({ children }: { children: ReactNode }) {
           segments: [],
           audioId: null,
           durationMs: result.durationMs,
-          language: LANGUAGE,
+          language: getTranscriptionSettings().language,
           modelId: MODEL_ID,
           device: getModelState().device ?? 'wasm',
           status: 'queued',
@@ -307,7 +308,7 @@ function useRecoverOrphans() {
           segments: [],
           audioId: null,
           durationMs: 0,
-          language: LANGUAGE,
+          language: getTranscriptionSettings().language,
           modelId: MODEL_ID,
           device: 'wasm',
           status: 'queued',

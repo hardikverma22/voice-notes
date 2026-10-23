@@ -6,6 +6,7 @@ import {
   NewTextNoteButton,
   NotesLibrary,
 } from '../features/notes/NotesLibrary';
+import { DropToImport, ImportButton } from '../features/import/ImportControls';
 import { TasksLink } from '../features/tasks/TasksLink';
 import { ModelChip } from '../features/transcribe/ModelIndicator';
 import { RecordingPill } from './RecordingPill';
@@ -99,7 +100,7 @@ export function Layout({ route, children }: { route: Route; children: ReactNode 
             <Brand />
             <IconButton icon={GearSixIcon} label="Settings" size="sm" onClick={openSettings} />
           </div>
-          <div className="flex gap-2 px-3 pb-3">
+          <div className="flex flex-col gap-2 px-3 pb-3">
             <a
               href="#/"
               aria-current={route.name === 'home' ? 'page' : undefined}
@@ -108,7 +109,10 @@ export function Layout({ route, children }: { route: Route; children: ReactNode 
               <MicrophoneIcon aria-hidden="true" weight="fill" className="size-4" />
               New recording
             </a>
-            <NewTextNoteButton />
+            <div className="grid grid-cols-2 gap-2">
+              <NewTextNoteButton />
+              <ImportButton variant="chip" />
+            </div>
           </div>
           <nav aria-label="Sections" className="px-3 pb-3">
             <TasksLink variant="nav" active={route.name === 'tasks'} />
@@ -136,6 +140,7 @@ export function Layout({ route, children }: { route: Route; children: ReactNode 
       </div>
 
       <RecordingPill visible={route.name !== 'home'} />
+      <DropToImport />
       {settingsLoaded ? (
         <Suspense fallback={null}>
           <SettingsDialog open={settingsOpen} onClose={() => setSettingsOpen(false)} />

@@ -5,7 +5,17 @@ export const SAMPLE_RATE = 16_000;
 export const DTYPE_WEBGPU = { encoder_model: 'fp32', decoder_model_merged: 'q4' } as const;
 /** WASM: 8-bit both (~22 MB + ~51 MB). Verified: files encoder_model_quantized.onnx + decoder_model_merged_quantized.onnx. */
 export const DTYPE_WASM = { encoder_model: 'q8', decoder_model_merged: 'q8' } as const;
+/** Default language; the person can change it in Settings (see settings.ts). */
 export const LANGUAGE = 'english';
+
+/**
+ * "Accurate" quality: whisper-small for the final pass only, on WebGPU with fp16 support.
+ * fp16 encoder (177 MB) + q4 decoder (233 MB), about 410 MB. A full-precision encoder would make
+ * it 586 MB; a q4 encoder (299 MB total) costs Whisper accuracy, which defeats the point.
+ */
+export const ACCURATE_MODEL_ID = 'onnx-community/whisper-small';
+export const DTYPE_ACCURATE = { encoder_model: 'fp16', decoder_model_merged: 'q4' } as const;
+export const APPROX_ACCURATE_MB = 410;
 export const LIVE_TICK_MS = 2_000;
 export const WINDOW_COMMIT_SEC = 20;
 export const COMMIT_GUARD_SEC = 3;

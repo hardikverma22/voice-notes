@@ -62,6 +62,12 @@ button:not(:disabled),
   }
 }
 
+input,
+textarea,
+[contenteditable='true'] {
+  caret-color: var(--vn-accent);
+}
+
 ::selection {
   background: color-mix(in srgb, var(--vn-accent) 28%, transparent);
 }
