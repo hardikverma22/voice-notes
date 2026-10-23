@@ -6,7 +6,8 @@ import { gzipSync } from 'node:zlib';
 
 const BUDGET_GZIP_KB = 170;
 const html = readFileSync('dist/index.html', 'utf8');
-const startup = [...html.matchAll(/(?:src|href)="\/?(assets\/[^"]+\.js)"/g)].map((m) => m[1]);
+// Paths may carry a base prefix (GitHub Pages serves from /voice-notes/assets/...).
+const startup = [...html.matchAll(/(?:src|href)="[^"]*?(assets\/[^"]+\.js)"/g)].map((m) => m[1]);
 if (!startup.some((f) => f.startsWith('assets/index-'))) {
   console.error('Entry chunk not found in dist/index.html');
   process.exit(1);
