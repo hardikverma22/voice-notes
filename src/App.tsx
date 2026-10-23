@@ -10,6 +10,7 @@ import { initSearch } from './features/search/searchService';
 import { initModel } from './features/transcribe/modelStore';
 
 const NotePage = lazy(() => import('./features/notes/NotePage'));
+const TasksPage = lazy(() => import('./features/tasks/TasksPage'));
 
 export default function App() {
   useEffect(() => {
@@ -34,6 +35,10 @@ function AppContent() {
       {route.name === 'note' ? (
         <Suspense fallback={null}>
           <NotePage key={route.id} id={route.id} t={route.t} />
+        </Suspense>
+      ) : route.name === 'tasks' ? (
+        <Suspense fallback={null}>
+          <TasksPage />
         </Suspense>
       ) : (
         <HomePage />

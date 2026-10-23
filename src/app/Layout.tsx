@@ -6,6 +6,7 @@ import {
   NewTextNoteButton,
   NotesLibrary,
 } from '../features/notes/NotesLibrary';
+import { TasksLink } from '../features/tasks/TasksLink';
 import { ModelChip } from '../features/transcribe/ModelIndicator';
 import { RecordingPill } from './RecordingPill';
 import { navigate, type Route } from './router';
@@ -71,7 +72,7 @@ export function Layout({ route, children }: { route: Route; children: ReactNode 
 
   // Move focus to the main region on route change, for screen readers.
   useEffect(() => {
-    if (route.name === 'note') document.getElementById('main')?.focus({ preventScroll: true });
+    if (route.name !== 'home') document.getElementById('main')?.focus({ preventScroll: true });
     window.scrollTo({ top: 0 });
   }, [route]);
 
@@ -109,6 +110,9 @@ export function Layout({ route, children }: { route: Route; children: ReactNode 
             </a>
             <NewTextNoteButton />
           </div>
+          <nav aria-label="Sections" className="px-3 pb-3">
+            <TasksLink variant="nav" active={route.name === 'tasks'} />
+          </nav>
           <NotesLibrary variant="sidebar" />
         </aside>
 

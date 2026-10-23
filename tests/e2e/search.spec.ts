@@ -9,9 +9,15 @@ const NOTES = [
   // Related notes need eight or more notes, so the library average is a fair baseline.
   ['Insurance', 'Car insurance renews next month, compare three quotes before it rolls over.'],
   ['Story idea', 'A lighthouse keeper records the sea every night until a voice answers back.'],
-  ['Boiler', 'The landlord says the boiler gets serviced on Tuesday morning, someone must be home.'],
+  [
+    'Boiler',
+    'The landlord says the boiler gets serviced on Tuesday morning, someone must be home.',
+  ],
   ['Spanish', 'Twenty minutes of Spanish every morning, podcast for listening and flashcards.'],
-  ['Subscriptions', 'Subscriptions crept up to sixty a month, cancel the second streaming service.'],
+  [
+    'Subscriptions',
+    'Subscriptions crept up to sixty a month, cancel the second streaming service.',
+  ],
 ] as const;
 
 async function seedNotes(page: Page) {

@@ -29,6 +29,7 @@ import { deleteNote, listNotes, renameNote, restoreNote, setPinned } from '../..
 import { extensionFor } from '../recorder/mime';
 import { downloadBlob, fileNameFor } from './exportNote';
 import { MeaningResults } from '../search/MeaningResults';
+import { TasksLink } from '../tasks/TasksLink';
 import { createTextNote } from './createTextNote';
 import { filterNotes, groupNotes, listTime, snippet } from './groupNotes';
 import { Highlight } from './Highlight';
@@ -114,7 +115,10 @@ export function NotesLibrary({ variant }: { variant: 'sidebar' | 'page' }) {
                 {notes.length} {notes.length === 1 ? 'note' : 'notes'} · {totalMinutes} min recorded
               </p>
             </div>
-            <NewTextNoteButton />
+            <div className="flex items-center gap-2">
+              <TasksLink variant="chip" active={false} />
+              <NewTextNoteButton />
+            </div>
           </div>
         ) : null}
 
