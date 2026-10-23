@@ -6,6 +6,7 @@ import { ProgressBar } from '../design/components/ProgressBar';
 import { Segmented } from '../design/components/Segmented';
 import { useToast } from '../design/components/useToast';
 import {
+  ArrowsClockwiseIcon,
   CloudArrowDownIcon,
   DesktopIcon,
   DownloadSimpleIcon,
@@ -17,6 +18,9 @@ import {
 import { downloadBlob } from '../features/notes/exportNote';
 import { ModelProgressCard, ModelReadyLine } from '../features/transcribe/ModelIndicator';
 import { loadModel, useModel } from '../features/transcribe/modelStore';
+import { useEmbedModel } from '../features/search/embedStore';
+import { useIndexState } from '../features/search/indexer';
+import { rebuildSearchIndex, turnOffSearch, turnOnSearch } from '../features/search/searchService';
 import { formatBytes } from '../lib/format';
 import { deleteAllNotes } from '../storage/notes';
 import { navigate } from './router';
@@ -34,8 +38,10 @@ export function SettingsDialog({ open, onClose }: { open: boolean; onClose: () =
       <div className="flex flex-col divide-y divide-border">
         <AppearanceSection />
         <TranscriptionSection />
+        <SearchSection />
         <DataSection open={open} />
         <ShortcutsSection />
+        {import.meta.env.DEV ? <DeveloperSection /> : null}
       </div>
     </Dialog>
   );
@@ -102,6 +108,64 @@ function TranscriptionSection() {
           </p>
         ) : null}
       </div>
+    </Section>
+  );
+}
+
+function SearchSection() {
+  const model = useEmbedModel();
+  const index = useIndexState();
+  return (
+    <Section title="Search by meaning">
+      <p className="text-sm text-fg-muted text-pretty">
+        Finds notes that say something in other words, not only exact matches, and suggests related
+        notes. A small model (about {model.approxDownloadMB} MB) runs on this device; nothing is
+        uploaded.
+      </p>
+      {model.status === 'off' ? (
+        <div>
+          <Button size="sm" variant="secondary" icon={CloudArrowDownIcon} onClick={turnOnSearch}>
+            Turn on
+          </Button>
+        </div>
+      ) : model.status === 'loading' || model.status === 'probing' ? (
+        <div className="flex flex-col gap-2 text-xs text-fg-muted">
+          <ProgressBar value={model.percent} label="Search model download" />
+          <p className="tabular" role="status">
+            {model.cached ? 'Loading…' : `Downloading… ${Math.round(model.percent)}%`}
+          </p>
+        </div>
+      ) : model.status === 'error' ? (
+        <div className="flex flex-wrap items-center gap-3 text-sm">
+          <p className="text-danger">The search model could not load.</p>
+          <Button size="sm" variant="secondary" onClick={turnOnSearch}>
+            Try again
+          </Button>
+        </div>
+      ) : (
+        <div className="flex flex-col gap-3">
+          <p className="tabular text-sm" role="status">
+            {index.running
+              ? `Indexing ${index.indexed} of ${index.total} notes…`
+              : `On. ${index.indexed} ${index.indexed === 1 ? 'note' : 'notes'} indexed.`}
+          </p>
+          <div className="flex flex-wrap gap-2">
+            <Button
+              size="sm"
+              variant="secondary"
+              icon={ArrowsClockwiseIcon}
+              onClick={() => void rebuildSearchIndex()}
+              disabled={index.running}
+            >
+              Rebuild index
+            </Button>
+            <Button size="sm" variant="ghost" onClick={() => void turnOffSearch()}>
+              Turn off
+            </Button>
+          </div>
+          <p className="text-xs text-fg-muted">Turning it off also deletes the search index.</p>
+        </div>
+      )}
     </Section>
   );
 }
@@ -238,6 +302,40 @@ function DataSection({ open }: { open: boolean }) {
 
 function plural(count: number, word: string): string {
   return `${count} ${word}${count === 1 ? '' : 's'}`;
+}
+
+/** Dev builds only: sample notes to try search and the library with. */
+function DeveloperSection() {
+  const toast = useToast();
+  async function add() {
+    const { addDemoNotes } = await import('../dev/demoNotes');
+    const count = await addDemoNotes();
+    toast.show({
+      tone: 'success',
+      message: `Added ${count} demo notes. Try searching “teeth check-up” or “injury while jogging”.`,
+      durationMs: 6000,
+    });
+  }
+  async function remove() {
+    const { removeDemoNotes } = await import('../dev/demoNotes');
+    const count = await removeDemoNotes();
+    toast.show({ message: `Removed ${plural(count, 'demo note')}` });
+  }
+  return (
+    <Section title="Developer">
+      <p className="text-sm text-fg-muted">
+        Shown in development only. Demo notes are tagged #demo and can be removed here.
+      </p>
+      <div className="flex flex-wrap gap-2">
+        <Button size="sm" variant="secondary" onClick={() => void add()}>
+          Add demo notes
+        </Button>
+        <Button size="sm" variant="ghost" onClick={() => void remove()}>
+          Remove demo notes
+        </Button>
+      </div>
+    </Section>
+  );
 }
 
 function ShortcutsSection() {

@@ -53,6 +53,9 @@ browser's storage.
 - **Instant search** across titles and text with highlighted matches
   (<kbd>⌘</kbd> <kbd>K</kbd> or <kbd>/</kbd>).
 - Filters for **Pinned** and **With audio**. Pin important notes to the top.
+- **Search by meaning** (opt-in): also finds notes that say it in other words, with the
+  matching passage and a play-from-here time, plus related notes on each note. A 24 MB model
+  runs on your device.
 - **Tags** on any note, with suggestions from tags you already use, and a filter by tag.
 - **Quick actions** on every note in the list (⋯ or right-click): rename, pin, copy, download
   audio, delete with Undo.
@@ -337,7 +340,7 @@ publishing. Any static host works: serve `dist/` over HTTPS.
 - [x] Append a new recording to an existing note
 - [x] Tags (folders may follow)
 - [x] Full backup including audio (zip)
-- [ ] On-device semantic search across notes, with related notes
+- [x] On-device semantic search across notes, with related notes
 - [ ] Optional end-to-end encrypted sync between your own devices
 
 ## Contributing

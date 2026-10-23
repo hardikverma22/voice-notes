@@ -1,4 +1,4 @@
-// Exit 1 if the main entry chunk is over budget or transformers.js leaked out of the worker chunk.
+// Exit 1 if the main entry chunk is over budget or transformers.js leaked out of the worker chunks.
 import { readFileSync, readdirSync } from 'node:fs';
 import { gzipSync } from 'node:zlib';
 
@@ -15,7 +15,7 @@ const kb = gzipSync(readFileSync(`dist/${entry}`)).length / 1024;
 console.log(`main entry ${entry}: ${kb.toFixed(1)} kB gzip (budget ${BUDGET_GZIP_KB} kB)`);
 let failed = kb > BUDGET_GZIP_KB;
 for (const f of readdirSync('dist/assets').filter(
-  (n) => n.endsWith('.js') && !n.startsWith('whisper.worker-'),
+  (n) => n.endsWith('.js') && !n.startsWith('whisper.worker-') && !n.startsWith('embed.worker-'),
 )) {
   const src = readFileSync(`dist/assets/${f}`, 'utf8');
   if (src.includes('onnxruntime') || src.includes('automatic-speech-recognition')) {

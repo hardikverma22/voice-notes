@@ -28,6 +28,7 @@ import { getAudio } from '../../storage/audio';
 import { deleteNote, listNotes, renameNote, restoreNote, setPinned } from '../../storage/notes';
 import { extensionFor } from '../recorder/mime';
 import { downloadBlob, fileNameFor } from './exportNote';
+import { MeaningResults } from '../search/MeaningResults';
 import { createTextNote } from './createTextNote';
 import { filterNotes, groupNotes, listTime, snippet } from './groupNotes';
 import { Highlight } from './Highlight';
@@ -80,14 +81,25 @@ export function NotesLibrary({ variant }: { variant: 'sidebar' | 'page' }) {
   if (activeTag && !shownTags.some((t) => t.tag === activeTag)) {
     shownTags.push(tags.find((t) => t.tag === activeTag)!);
   }
-  const filtered = filterNotes(
-    notes.filter(
-      (note) =>
-        (filter === 'pinned' ? note.pinned : filter === 'audio' ? note.audioId !== null : true) &&
-        (!activeTag || note.tags.some((t) => t.toLowerCase() === activeTag.toLowerCase())),
-    ),
-    deferredQuery,
+  const scoped = notes.filter(
+    (note) =>
+      (filter === 'pinned' ? note.pinned : filter === 'audio' ? note.audioId !== null : true) &&
+      (!activeTag || note.tags.some((t) => t.toLowerCase() === activeTag.toLowerCase())),
   );
+  const filtered = filterNotes(scoped, deferredQuery);
+  // Search by meaning skips exact matches and anything the filters hide.
+  const scopedIds = new Set(scoped.map((note) => note.id));
+  const meaningExclude = [
+    ...filtered.map((note) => note.id),
+    ...notes.filter((note) => !scopedIds.has(note.id)).map((note) => note.id),
+  ];
+  const scopeLabel = [
+    filter === 'pinned' ? 'pinned' : filter === 'audio' ? 'recorded' : '',
+    'notes',
+    activeTag ? `tagged #${activeTag}` : '',
+  ]
+    .filter(Boolean)
+    .join(' ');
   const groups = groupNotes(filtered);
   const totalMinutes = Math.round(notes.reduce((sum, note) => sum + note.durationMs, 0) / 60_000);
 
@@ -194,46 +206,76 @@ export function NotesLibrary({ variant }: { variant: 'sidebar' | 'page' }) {
       >
         {notes.length === 0 ? (
           <EmptyLibrary />
-        ) : groups.length === 0 ? (
-          <p className="px-2 py-10 text-center text-sm text-fg-muted" role="status">
-            {deferredQuery ? (
-              <>No notes match “{deferredQuery}”.</>
-            ) : activeTag ? (
-              <>No notes tagged #{activeTag} here.</>
-            ) : (
-              'Nothing here yet.'
-            )}
-          </p>
         ) : (
           <div className="flex flex-col gap-5 pt-2">
-            {deferredQuery ? (
-              <p className="px-2 text-xs text-fg-muted" role="status">
-                {filtered.length} {filtered.length === 1 ? 'result' : 'results'}
+            {groups.length === 0 ? (
+              <p
+                className={`px-2 text-center text-sm text-fg-muted ${deferredQuery ? 'py-4' : 'py-10'}`}
+                role="status"
+              >
+                {deferredQuery ? (
+                  scopeLabel === 'notes' ? (
+                    <>No notes contain “{deferredQuery}”.</>
+                  ) : (
+                    <>
+                      No {scopeLabel} contain “{deferredQuery}”.{' '}
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setFilter('all');
+                          setTag(null);
+                        }}
+                        className="font-medium text-accent underline-offset-4 hover:underline focus-visible:outline-2 focus-visible:outline-focus"
+                      >
+                        Search all notes
+                      </button>
+                    </>
+                  )
+                ) : activeTag ? (
+                  <>No notes tagged #{activeTag} here.</>
+                ) : (
+                  'Nothing here yet.'
+                )}
               </p>
+            ) : (
+              <>
+                {deferredQuery ? (
+                  <p className="px-2 text-xs text-fg-muted" role="status">
+                    {filtered.length} {filtered.length === 1 ? 'exact match' : 'exact matches'}
+                  </p>
+                ) : null}
+                {groups.map((group) => (
+                  <section key={group.label} aria-label={group.label}>
+                    <h3 className="mb-1.5 flex items-center gap-1.5 px-2 text-[0.7rem] font-semibold tracking-wider text-fg-muted uppercase">
+                      {group.label === 'Pinned' ? (
+                        <PushPinIcon aria-hidden="true" weight="fill" className="size-3" />
+                      ) : null}
+                      {group.label}
+                    </h3>
+                    <ul className="flex flex-col gap-1">
+                      <AnimatePresence initial={false}>
+                        {group.notes.map((note) => (
+                          <NoteRow
+                            key={note.id}
+                            note={note}
+                            query={deferredQuery}
+                            active={note.id === activeId}
+                            compact={variant === 'sidebar'}
+                          />
+                        ))}
+                      </AnimatePresence>
+                    </ul>
+                  </section>
+                ))}
+              </>
+            )}
+            {deferredQuery ? (
+              <MeaningResults
+                query={deferredQuery}
+                keywordIds={meaningExclude}
+                compact={variant === 'sidebar'}
+              />
             ) : null}
-            {groups.map((group) => (
-              <section key={group.label} aria-label={group.label}>
-                <h3 className="mb-1.5 flex items-center gap-1.5 px-2 text-[0.7rem] font-semibold tracking-wider text-fg-muted uppercase">
-                  {group.label === 'Pinned' ? (
-                    <PushPinIcon aria-hidden="true" weight="fill" className="size-3" />
-                  ) : null}
-                  {group.label}
-                </h3>
-                <ul className="flex flex-col gap-1">
-                  <AnimatePresence initial={false}>
-                    {group.notes.map((note) => (
-                      <NoteRow
-                        key={note.id}
-                        note={note}
-                        query={deferredQuery}
-                        active={note.id === activeId}
-                        compact={variant === 'sidebar'}
-                      />
-                    ))}
-                  </AnimatePresence>
-                </ul>
-              </section>
-            ))}
           </div>
         )}
       </div>

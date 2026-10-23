@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { useLiveQuery } from 'dexie-react-hooks';
 import { AnimatePresence, m } from 'motion/react';
 import type { Editor } from '@tiptap/react';
@@ -44,13 +44,14 @@ import { downloadBlob, downloadText, fileNameFor } from './exportNote';
 import NoteEditor, { type SaveStatus } from './NoteEditor';
 import { RecordMorePanel } from './RecordMorePanel';
 import { StatusBadge } from './StatusBadge';
+import { RelatedNotes } from '../search/RelatedNotes';
 import { TagEditor } from './TagEditor';
 import { TranscriptView } from './TranscriptView';
 import { useAudioPlayer } from './useAudioPlayer';
 
 type Tab = 'note' | 'transcript';
 
-export default function NotePage({ id }: { id: string }) {
+export default function NotePage({ id, t = null }: { id: string; t?: number | null }) {
   // undefined while loading, null once we know the note is gone.
   const note = useLiveQuery(async () => (await getNote(id)) ?? null, [id]);
   if (note === undefined) return <NoteSkeleton />;
@@ -64,10 +65,10 @@ export default function NotePage({ id }: { id: string }) {
       </div>
     );
   }
-  return <NoteView note={note} />;
+  return <NoteView note={note} t={t} />;
 }
 
-function NoteView({ note }: { note: Note }) {
+function NoteView({ note, t }: { note: Note; t: number | null }) {
   const toast = useToast();
   const [editor, setEditor] = useState<Editor | null>(null);
   const [saveStatus, setSaveStatus] = useState<SaveStatus>('idle');
@@ -101,6 +102,18 @@ function NoteView({ note }: { note: Note }) {
   }, [audioId]);
 
   const player = useAudioPlayer(clipUrl, note.durationMs / 1000);
+  const playerRef = useRef<HTMLDivElement>(null);
+
+  // Opened from a search result: jump to the matching moment once the audio is ready.
+  const { ready: playerReady, seek, play } = player;
+  const appliedTRef = useRef<number | null>(null);
+  useEffect(() => {
+    if (t === null || !playerReady || appliedTRef.current === t) return;
+    appliedTRef.current = t;
+    seek(t);
+    play();
+    playerRef.current?.scrollIntoView({ block: 'center', behavior: 'smooth' });
+  }, [t, playerReady, seek, play]);
   const locked = note.status === 'queued' || note.status === 'transcribing';
   const recorderBusy = rec.state !== 'idle' && rec.state !== 'error';
   const recordingHere = recorderBusy && rec.targetNoteId === note.id;
@@ -294,6 +307,7 @@ function NoteView({ note }: { note: Note }) {
                 <RecordMorePanel key="record-more" />
               ) : audio && clipUrl ? (
                 <m.div
+                  ref={playerRef}
                   key={`player-${audio.id}`}
                   initial={{ opacity: 0 }}
                   animate={{ opacity: 1 }}
@@ -346,6 +360,8 @@ function NoteView({ note }: { note: Note }) {
           </div>
         }
       />
+
+      <RelatedNotes noteId={note.id} />
     </article>
   );
 }

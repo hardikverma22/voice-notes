@@ -115,7 +115,25 @@ export function useModel(): ModelState {
   );
 }
 
+let inFlight = 0;
+let lastActivityAt = 0;
+
 /** Transcribes English speech. Other languages need a larger model (not offered yet). */
 export function transcribe(kind: TranscribeKind, audio: Float32Array): Promise<TranscribeResult> {
-  return getWhisperClient().transcribe(kind, audio, LANGUAGE);
+  inFlight++;
+  lastActivityAt = Date.now();
+  return getWhisperClient()
+    .transcribe(kind, audio, LANGUAGE)
+    .finally(() => {
+      inFlight--;
+      lastActivityAt = Date.now();
+    });
+}
+
+/**
+ * True while Whisper is transcribing or did so in the last quietMs. Live transcription runs
+ * every couple of seconds while recording, so this stays true for the whole recording.
+ */
+export function isWhisperBusy(quietMs = 4000): boolean {
+  return inFlight > 0 || Date.now() - lastActivityAt < quietMs;
 }
