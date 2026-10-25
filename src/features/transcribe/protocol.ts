@@ -13,6 +13,8 @@ export type ToWorker =
   | { type: 'load' }
   | { type: 'probe-accurate' }
   | { type: 'load-accurate' }
+  /** Drops a loaded model from memory, after its files were deleted. */
+  | { type: 'unload'; which: 'speech' | 'accurate' }
   | {
       type: 'transcribe';
       id: number;

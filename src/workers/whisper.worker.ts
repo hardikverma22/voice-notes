@@ -322,6 +322,11 @@ self.onmessage = (event: MessageEvent<ToWorker>) => {
         post({ type: 'accurate-probe-result', supported, cached: Boolean(cached) });
       })();
       break;
+    case 'unload':
+      // Dropping the references lets the pipeline be collected. Jobs already running keep theirs.
+      if (message.which === 'speech') loadPromise = null;
+      else accuratePromise = null;
+      break;
     case 'load-accurate':
       ensureAccurate()
         .then(() => post({ type: 'accurate-ready', modelId: ACCURATE_MODEL_ID }))

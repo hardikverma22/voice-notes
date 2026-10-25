@@ -29,6 +29,8 @@ import {
 } from '../features/transcribe/modelCache';
 import {
   forgetAccurateDownload,
+  forgetSpeechModel,
+  isWhisperBusy,
   loadAccurateModel,
   loadModel,
   useAccurateModel,
@@ -413,10 +415,17 @@ function ModelsSection({ open }: { open: boolean }) {
   }, [open, version, downloadKey]);
 
   async function remove(model: CachedModel) {
+    if (isWhisperBusy()) {
+      toast.show({ message: 'Wait for the current transcription to finish, then delete.' });
+      setConfirmId(null);
+      return;
+    }
     await deleteCachedModel(model.id);
     if (model.id === ACCURATE_MODEL_ID) {
       setTranscriptionSettings({ quality: 'fast' });
       forgetAccurateDownload();
+    } else if (model.id === MODEL_ID) {
+      forgetSpeechModel();
     } else if (model.id === EMBED_MODEL_ID) {
       await turnOffSearch();
     }

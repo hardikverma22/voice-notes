@@ -55,6 +55,10 @@ class WhisperClient {
     this.post({ type: 'load-accurate' });
   }
 
+  unload(which: 'speech' | 'accurate'): void {
+    this.post({ type: 'unload', which });
+  }
+
   transcribe(
     kind: TranscribeKind,
     audio: Float32Array,
