@@ -121,9 +121,17 @@ export function whenAccurateReady(): Promise<void> {
   return promise;
 }
 
-/** After its files are deleted: it downloads again if chosen (a loaded copy still works now). */
+/** After its files are deleted: unloads it, so the state matches the cache. Downloads again if chosen. */
 export function forgetAccurateDownload(): void {
-  if (accurate.status !== 'unsupported') setAccurate({ cached: false, status: 'idle', percent: 0 });
+  if (accurate.status === 'unsupported') return;
+  if (started) getWhisperClient().unload('accurate');
+  setAccurate({ cached: false, status: 'idle', percent: 0 });
+}
+
+/** After the speech files are deleted: unloads the model, so the state matches the cache. */
+export function forgetSpeechModel(): void {
+  if (started) getWhisperClient().unload('speech');
+  set({ status: 'idle', cached: false, loaded: 0, total: 0, percent: 0, errorMessage: null });
 }
 
 export function getAccurateState(): AccurateState {
