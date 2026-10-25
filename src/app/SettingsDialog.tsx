@@ -277,7 +277,8 @@ function QualityPicker() {
       ) : quality === 'accurate' && acc.status === 'idle' ? (
         <div className="flex flex-wrap items-center gap-3">
           <p className="text-xs text-fg-muted">
-            Downloads the first time it is needed (about {acc.approxDownloadMB} MB).
+            Not downloaded yet (about {acc.approxDownloadMB} MB). Until you download it, final
+            transcripts use the Fast model.
           </p>
           <Button
             size="sm"
