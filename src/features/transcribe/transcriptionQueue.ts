@@ -12,12 +12,25 @@ import { transcriptToDoc } from '../notes/transcriptToDoc';
 import { decodeToPcm16k } from '../recorder/decode';
 import { ACCURATE_MODEL_ID, MODEL_ID, SAMPLE_RATE } from './config';
 import { joinSegments } from './merge';
-import { getModelState, transcribe, whenAccurateReady, whenModelReady } from './modelStore';
+import {
+  accurateUsableWithoutDownload,
+  getModelState,
+  transcribe,
+  whenAccurateReady,
+  whenModelReady,
+} from './modelStore';
 import { getTranscriptionSettings } from './settings';
 
-/** Accurate when chosen and it loads; otherwise the fast model, so a note is never left waiting. */
+/**
+ * Accurate when chosen and already downloaded (or downloading); otherwise the fast model. A note
+ * is never left waiting, and Accurate is never downloaded without the person pressing Download.
+ */
 async function pickAccurate(): Promise<boolean> {
   if (getTranscriptionSettings().quality !== 'accurate') return false;
+  if (!accurateUsableWithoutDownload()) {
+    console.info('Accurate model is not downloaded; using the fast model for this note');
+    return false;
+  }
   try {
     await whenAccurateReady();
     return true;

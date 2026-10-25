@@ -130,6 +130,14 @@ export function getAccurateState(): AccurateState {
   return accurate;
 }
 
+/**
+ * True when Accurate can be used without starting a new download: it is loaded, or already
+ * loading (a download the person started). Nothing is downloaded from here.
+ */
+export function accurateUsableWithoutDownload(): boolean {
+  return accurate.status === 'ready' || accurate.status === 'loading';
+}
+
 export function useAccurateModel(): AccurateState {
   return useSyncExternalStore(
     (listener) => {
