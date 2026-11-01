@@ -1,4 +1,5 @@
 import { expect, test, type Page } from '@playwright/test';
+import { readFile, writeFile } from 'node:fs/promises';
 import { ensureModelReady, stopAndOpenNote } from './helpers';
 
 // Utility spec that writes README screenshots. Run with: SCREENSHOTS=1 npx playwright test screenshots.spec.ts
@@ -421,4 +422,25 @@ test('README screenshots: screen notes', async ({ page, context }) => {
   await viewer.getByRole('button', { name: 'Copy image' }).hover();
   await page.waitForTimeout(700);
   await page.screenshot({ path: `${OUT}/screen-viewer-tooltip.png` });
+  await page.keyboard.press('Escape');
+
+  // A still from the exported video, decoded back in the browser.
+  const rendering = page.waitForEvent('download', { timeout: 60_000 });
+  await page.getByRole('button', { name: 'Video' }).click();
+  const mp4 = await readFile((await (await rendering).path())!);
+  const still = await page.evaluate(async (b64) => {
+    const bytes = Uint8Array.from(atob(b64), (c) => c.charCodeAt(0));
+    const video = document.createElement('video');
+    video.muted = true;
+    video.src = URL.createObjectURL(new Blob([bytes], { type: 'video/mp4' }));
+    await new Promise((resolve) => (video.onloadeddata = resolve));
+    video.currentTime = 27;
+    await new Promise((resolve) => (video.onseeked = resolve));
+    const canvas = document.createElement('canvas');
+    canvas.width = video.videoWidth;
+    canvas.height = video.videoHeight;
+    canvas.getContext('2d')!.drawImage(video, 0, 0);
+    return canvas.toDataURL('image/jpeg', 0.85).split(',')[1]!;
+  }, mp4.toString('base64'));
+  await writeFile(`${OUT}/screen-video-still.jpg`, Buffer.from(still, 'base64'));
 });

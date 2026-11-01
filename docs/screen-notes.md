@@ -100,6 +100,19 @@ priority, and what the coloured marks mean. Everything a person wrote is escaped
 `report.html`. A note exported before its final transcript is ready says so at the top. The
 zip code (fflate) loads only when you export.
 
+## Video export (`videoPlan.ts`, `renderVideo.ts`)
+
+The video is a slideshow that follows the voice. `planScenes` cuts the timeline wherever the
+frame on screen or the caption changes (frames switch with the same 1.5 s lead as replay,
+captions stay up 1.5 s after their segment). Each scene is drawn once on a 1920×1080 canvas
+(frame letterboxed, marks flattened, caption at the bottom, title banner for the first 3 s)
+and encoded with WebCodecs through mediabunny. Scenes are capped at 1 s so players seek well.
+Because only changes are encoded, a minute of recording renders in seconds.
+
+Codecs are picked by what the browser can encode: H.264 then VP9 then AV1 for video, AAC then
+Opus for audio, in an MP4. Browsers without `VideoEncoder` get a clear message. The video
+code loads only when you export.
+
 ## Storage and privacy
 
 Frames are WebP (JPEG where the browser can't encode WebP) at most 1920 px on the long side:

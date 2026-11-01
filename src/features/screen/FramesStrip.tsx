@@ -1,6 +1,13 @@
 import { useEffect, useRef, useState } from 'react';
 import { Button } from '../../design/components/Button';
-import { FileZipIcon, ImagesIcon, PauseIcon, PencilSimpleIcon, PlayIcon } from '../../design/icons';
+import {
+  FileZipIcon,
+  FilmStripIcon,
+  ImagesIcon,
+  PauseIcon,
+  PencilSimpleIcon,
+  PlayIcon,
+} from '../../design/icons';
 import { formatDuration } from '../../lib/format';
 import type { Frame, Note } from '../../storage/db';
 import type { AudioPlayer } from '../notes/useAudioPlayer';
@@ -20,6 +27,8 @@ export function FramesStrip({
   player,
   onExport,
   exporting,
+  onExportVideo,
+  videoProgress,
 }: {
   note: Note;
   /** The note's frames in time order; undefined while loading. */
@@ -28,6 +37,10 @@ export function FramesStrip({
   /** Zips the note with its frames for an AI agent. */
   onExport(): void;
   exporting: boolean;
+  /** Renders the note as an MP4. */
+  onExportVideo(): void;
+  /** 0..1 while the video renders, otherwise null. */
+  videoProgress: number | null;
 }) {
   const urls = useFrameUrls(frames);
   const [open, setOpen] = useState<number | null>(null);
@@ -83,19 +96,34 @@ export function FramesStrip({
             {drawn > 0 ? `, ${drawn} marked up` : ''}
           </span>
         </h2>
-        <Button
-          size="sm"
-          variant="soft"
-          icon={FileZipIcon}
-          onClick={onExport}
-          disabled={exporting}
-          data-tip={
-            'Export for agent\nA zip with report.md for AI agents, report.html for people, the frames and the audio'
-          }
-          data-tip-align="end"
-        >
-          {exporting ? 'Preparing…' : 'Export for agent'}
-        </Button>
+        <div className="flex items-center gap-1.5">
+          <Button
+            size="sm"
+            variant="secondary"
+            icon={FilmStripIcon}
+            onClick={onExportVideo}
+            disabled={videoProgress !== null}
+            data-tip={
+              'Export video\nAn MP4 of your screen, marks and voice, with captions. Made on this device.'
+            }
+            data-tip-align="end"
+          >
+            {videoProgress !== null ? `Rendering ${Math.round(videoProgress * 100)}%` : 'Video'}
+          </Button>
+          <Button
+            size="sm"
+            variant="soft"
+            icon={FileZipIcon}
+            onClick={onExport}
+            disabled={exporting}
+            data-tip={
+              'Export for agent\nA zip with report.md for AI agents, report.html for people, the frames and the audio'
+            }
+            data-tip-align="end"
+          >
+            {exporting ? 'Preparing…' : 'Export for agent'}
+          </Button>
+        </div>
       </div>
 
       <div

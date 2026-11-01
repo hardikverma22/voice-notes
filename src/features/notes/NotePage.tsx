@@ -15,6 +15,7 @@ import {
   DownloadSimpleIcon,
   FileTextIcon,
   FileZipIcon,
+  FilmStripIcon,
   MicrophoneIcon,
   PushPinIcon,
   ShareNetworkIcon,
@@ -80,6 +81,8 @@ function NoteView({ note, t }: { note: Note; t: number | null }) {
   const [clipUrl, setClipUrl] = useState<string | null>(null);
   const [newBookmarkId, setNewBookmarkId] = useState<string | null>(null);
   const [exporting, setExporting] = useState(false);
+  /** 0..1 while a video is rendering, otherwise null. */
+  const [videoProgress, setVideoProgress] = useState<number | null>(null);
   const rec = useRecording();
   const frames = useLiveQuery(() => listNoteFrames(note.id), [note.id]);
   const allTags = useLiveQuery(
@@ -196,6 +199,29 @@ function NoteView({ note, t }: { note: Note; t: number | null }) {
     }
   }
 
+  async function exportVideo() {
+    if (videoProgress !== null) return;
+    setVideoProgress(0);
+    try {
+      const { renderVideo } = await import('../screen/renderVideo');
+      const video = await renderVideo(note, setVideoProgress);
+      downloadBlob(video.name, video.blob);
+      toast.show({
+        tone: 'success',
+        message: 'Video ready: your screen, your marks and your voice, with captions.',
+        durationMs: 5000,
+      });
+    } catch (error) {
+      console.error('Could not make the video', error);
+      toast.show({
+        tone: 'error',
+        message: error instanceof Error ? error.message : 'Could not make the video.',
+      });
+    } finally {
+      setVideoProgress(null);
+    }
+  }
+
   function downloadAudio() {
     if (!audio) return;
     downloadBlob(fileNameFor(note.title, note.createdAt, extensionFor(audio.mimeType)), audio.blob);
@@ -222,6 +248,9 @@ function NoteView({ note, t }: { note: Note; t: number | null }) {
     { label: 'Export as Markdown', icon: FileTextIcon, onSelect: () => exportAs('md') },
     { label: 'Export as plain text', icon: FileTextIcon, onSelect: () => exportAs('txt') },
     { label: 'Export report (.zip)', icon: FileZipIcon, onSelect: () => void exportBundle() },
+    ...(frames?.length
+      ? [{ label: 'Export video (.mp4)', icon: FilmStripIcon, onSelect: () => void exportVideo() }]
+      : []),
     ...(audio
       ? [{ label: 'Download audio', icon: DownloadSimpleIcon, onSelect: downloadAudio }]
       : []),
@@ -367,6 +396,8 @@ function NoteView({ note, t }: { note: Note; t: number | null }) {
                 player={clipUrl ? player : null}
                 onExport={() => void exportBundle()}
                 exporting={exporting}
+                onExportVideo={() => void exportVideo()}
+                videoProgress={videoProgress}
               />
             ) : null}
 
