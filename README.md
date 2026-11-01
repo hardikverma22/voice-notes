@@ -440,6 +440,9 @@ mark up and export on a phone.
   notes. Speech fixtures need macOS `say`; those tests skip elsewhere. Screen recording runs
   against Chromium's fake display capture: auto and manual frames, drawing, undo, persistence,
   timeline ticks, and the exported zip's contents.
+- **CI** (GitHub Actions, every PR and push): `npm run verify`, plus the screen-recording,
+  OCR, home and smoke specs in Chromium and in Firefox (headed, in a virtual display, so it
+  can fake a shared screen). Specs that download the speech model run locally.
 - **Cross-browser:** `npm run test:e2e:cross` runs the screen-recording, OCR, home and smoke
   specs in Firefox (which can fake a mic and a shared screen), and the home and smoke specs in
   WebKit. Playwright's WebKit can't fake a shared screen or keep Blobs in IndexedDB, so screen
