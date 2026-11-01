@@ -104,6 +104,7 @@ export function RecordingProvider({ children }: { children: ReactNode }) {
           bookmarks: toBookmarks(marks, offsetSec),
         });
         if (sessionId) {
+          await screenRef.current.settle();
           await adoptSessionFrames(sessionId, noteId, offsetSec);
           await discardSession(sessionId);
         }
@@ -158,6 +159,7 @@ export function RecordingProvider({ children }: { children: ReactNode }) {
         if (sessionId) {
           const audio = await finalizeSession(sessionId, note.id);
           await setNoteAudio(note.id, audio.id);
+          await screenRef.current.settle();
           await adoptSessionFrames(sessionId, note.id);
         }
         enqueueTranscription(note.id, result.pcm);
@@ -218,7 +220,7 @@ export function RecordingProvider({ children }: { children: ReactNode }) {
       screenRef.current.stop();
       if (sessionId) {
         void discardSession(sessionId);
-        void discardSessionFrames(sessionId);
+        void screenRef.current.settle().then(() => discardSessionFrames(sessionId));
       }
       toast.show({ message: 'Recording discarded' });
     },
@@ -261,6 +263,16 @@ export function RecordingProvider({ children }: { children: ReactNode }) {
     void start();
   }, [state, start]);
 
+  const {
+    status: screenStatus,
+    frameCount,
+    lastFrameAt,
+    supported: screenSupported,
+    start: startScreen,
+    stop: stopScreen,
+    snap: snapScreen,
+    reset: resetScreen,
+  } = screen;
   const value = useMemo<RecordingContextValue>(
     () => ({
       state,
@@ -272,29 +284,29 @@ export function RecordingProvider({ children }: { children: ReactNode }) {
       targetNoteId,
       markCount,
       screen: {
-        status: screen.status,
-        frameCount: screen.frameCount,
-        lastFrameAt: screen.lastFrameAt,
-        supported: screen.supported,
+        status: screenStatus,
+        frameCount,
+        lastFrameAt,
+        supported: screenSupported,
       },
       start: () => {
         pendingTargetRef.current = null;
-        screen.reset();
+        resetScreen();
         void start();
       },
       startFor: (noteId) => {
         if (state !== 'idle' && state !== 'error') return;
         pendingTargetRef.current = noteId;
-        screen.reset();
+        resetScreen();
         void start();
       },
       startWithScreen: () => void startWithScreen(),
       shareScreen: () => {
         if (state !== 'recording' && state !== 'paused') return;
-        void screen.start();
+        void startScreen();
       },
-      stopScreen: screen.stop,
-      snap: screen.snap,
+      stopScreen: stopScreen,
+      snap: snapScreen,
       mark: () => {
         if (state !== 'recording' && state !== 'paused') return;
         marksRef.current.push(elapsedRef.current / 1000);
@@ -308,7 +320,7 @@ export function RecordingProvider({ children }: { children: ReactNode }) {
         if (state === 'recording' || state === 'paused') void stop();
         else if (state === 'idle' || state === 'error') {
           pendingTargetRef.current = null;
-          screen.reset();
+          resetScreen();
           void start();
         }
       },
@@ -323,7 +335,14 @@ export function RecordingProvider({ children }: { children: ReactNode }) {
       lastSavedId,
       targetNoteId,
       markCount,
-      screen,
+      screenStatus,
+      frameCount,
+      lastFrameAt,
+      screenSupported,
+      startScreen,
+      stopScreen,
+      snapScreen,
+      resetScreen,
       startWithScreen,
       start,
       stop,

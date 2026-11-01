@@ -33,6 +33,30 @@ browser's storage.
 
 ## Features
 
+**Show it, say it, hand it off** ✨ _new_
+
+Narrate your screen, then hand the result to an AI coding agent or a teammate. It's like a
+Loom made for agents, but nothing leaves your device.
+
+- **Record with screen.** Share a screen, window or tab alongside the microphone, from the home
+  screen or mid-recording. Desktop Chrome, Edge and Firefox.
+- **Frames that pick themselves.** A frame is kept when the screen changes _and settles_, so a
+  scroll is captured where it lands, not halfway. Press <kbd>S</kbd> to take one yourself.
+- **Mark it up.** Open any frame full screen and draw on it with a pen, highlighter, arrow or
+  box. Under the frame you see what you said while it was on screen. Copy the marked-up image,
+  or download it.
+- **Synced with your voice.** Frames sit on the audio timeline, and the filmstrip highlights the
+  frame on screen as the recording plays.
+- **Export for agent.** One zip holds `report.md`, written so an agent reads each frame
+  together with what you said about it, plus `report.html`, a single offline page anyone can
+  open with clickable timestamps, the frames with your marks flattened in, and the audio.
+- **Crash-safe like everything else.** Frames are saved as they're taken, recovered with an
+  interrupted recording, included in full backups, and deleted (or undone) with their note.
+
+<p align="center">
+  <img src="docs/screenshots/screen-viewer.png" alt="A screen frame of a checkout page, marked up with an arrow and a highlight, with the narration underneath" width="100%" />
+</p>
+
 **Recording that never makes you wait**
 
 - One tap to record, or press <kbd>Space</kbd>. The record button reacts to your voice and a
@@ -52,7 +76,7 @@ browser's storage.
   _Yesterday_, _Previous 7 days_ and by month.
 - **Instant search** across titles and text with highlighted matches
   (<kbd>⌘</kbd> <kbd>K</kbd> or <kbd>/</kbd>).
-- Filters for **Pinned** and **With audio**. Pin important notes to the top.
+- Filters for **Pinned**, **With audio** and **With screen**. Pin important notes to the top.
 - **Search by meaning** (opt-in): also finds notes that say it in other words, with the
   matching passage and a play-from-here time, plus related notes on each note. A 24 MB model
   runs on your device.
@@ -116,6 +140,14 @@ browser's storage.
   <tr>
     <td align="center"><sub><b>Search</b>: instant, highlighted, keyboard-driven</sub></td>
     <td align="center"><sub><b>Settings</b>: theme, model, storage, backups</sub></td>
+  </tr>
+  <tr>
+    <td><img src="docs/screenshots/screen-note-light.png" alt="A note with a filmstrip of three screen frames, two of them marked up, and an Export for agent button" /></td>
+    <td><img src="docs/screenshots/screen-viewer.png" alt="Full-screen frame viewer with drawing tools and the narration below the frame" /></td>
+  </tr>
+  <tr>
+    <td align="center"><sub><b>Screen notes</b>: filmstrip, marks, export for agent</sub></td>
+    <td align="center"><sub><b>Frame viewer</b>: pen, highlighter, arrow, box</sub></td>
   </tr>
   <tr>
     <td><img src="docs/screenshots/note-dark.png" alt="Note page in dark mode" /></td>
@@ -234,11 +266,13 @@ src/
 │   │                    transcription queue, Fast / Accurate settings, live-merge rules
 │   ├── import/          Audio and video files turned into notes
 │   ├── search/          Chunking, embedding store, indexer, cosine ranking, related notes
+│   ├── screen/          Screen capture, scene-change detection, frame viewer and drawing,
+│   │                    frame/transcript pairing, agent report (Markdown + HTML) and zip
 │   ├── tasks/           Checklist items from every note, for the Tasks page
 │   └── notes/           Library (search, groups, filters, tags), note page, Tiptap editor,
 │                        audio player, timestamps, marked moments, export, titles
 ├── lib/                 Formatting, debounce, tag helpers
-├── storage/             Dexie schema (v4), note and audio operations, zip backup and restore
+├── storage/             Dexie schema (v5), note, audio and frame operations, zip backup and restore
 ├── dev/                 Demo notes, for development builds only
 └── workers/
     ├── whisper.worker.ts  Speech recognition (Whisper)
@@ -258,12 +292,15 @@ src/
 | Search index is derived data                        | Chunks and vectors can be rebuilt at any time, so they are left out of backups and deleted with their note.     |
 | Accurate model only for the final pass              | Live text stays fast on the Fast model. The bigger model runs once, when the note is finalised.                 |
 | Hash routing                                        | Works on GitHub Pages and offline with no server rewrites.                                                      |
+| Screen frames ride on the recording session         | Frames are saved under the audio session as they're taken, so crash recovery and append work with no new paths. |
+| Drawings are vectors, flattened only on export      | Strokes stay editable (undo, clear) and crisp at any size. One SVG path string drives both overlay and export.  |
 
 ### Data model
 
 ```mermaid
 erDiagram
   NOTE ||--o| AUDIO : "has recording"
+  NOTE ||--o{ FRAME : "has screen frames"
   NOTE {
     string id PK
     string title
@@ -283,6 +320,14 @@ erDiagram
     string noteId FK
     blob blob
     string mimeType
+  }
+  FRAME {
+    string id PK
+    string noteId FK "null while recording"
+    string sessionId "set while recording"
+    number t "seconds into the audio"
+    blob blob "WebP, or JPEG on Safari"
+    json strokes "drawing, 0..1 coordinates"
   }
   AUDIO_CHUNK {
     number seq PK
@@ -357,6 +402,10 @@ notes**, removes everything.
 | Firefox                | Works. Records WebM or Ogg/Opus, whichever the version supports. Usually transcribes on CPU.                        |
 | Safari (macOS, iOS)    | Works. Records MP4/AAC and usually runs on CPU. Add to Home Screen so storage isn't evicted after 7 days of disuse. |
 
+Screen recording needs `getDisplayMedia`: desktop Chrome, Edge, Firefox and Safari. Phones
+can't share a screen, so the button is hidden there, but notes with frames still open,
+mark up and export on a phone.
+
 ## Testing
 
 - **Unit (Vitest):** live-merge rules, resampler, PCM buffer, MIME selection, titles, export
@@ -368,7 +417,9 @@ notes**, removes everything.
   final transcription, reload persistence, delete with undo, crash recovery, search, autosave,
   export, and offline use. It also covers file import (and rejecting non-audio), tags and
   filtering, marked moments, record-more, the Tasks page, and search by meaning with related
-  notes. Speech fixtures need macOS `say`; those tests skip elsewhere.
+  notes. Speech fixtures need macOS `say`; those tests skip elsewhere. Screen recording runs
+  against Chromium's fake display capture: auto and manual frames, drawing, undo, persistence,
+  timeline ticks, and the exported zip's contents.
 - **Accessibility:** axe (WCAG 2.0/2.1 AA) on home and note pages in light and dark, plus a
   phone-width layout check. Contrast for every token pair runs in `npm run verify`.
 
@@ -388,12 +439,15 @@ publishing. Any static host works: serve `dist/` over HTTPS.
 - [x] Full backup including audio (zip)
 - [x] On-device semantic search across notes, with related notes
 - [x] Tasks page collecting checklist items from every note
+- [x] Screen recording with marked-up frames, and an export made for AI agents
+- [ ] Text in frames (on-device OCR), so search finds what was on screen
 - [ ] Folders, built on tags
 - [ ] Optional end-to-end encrypted sync between your own devices
 
 ## Further reading
 
 - [docs/semantic-search.md](docs/semantic-search.md): the search model benchmark and design
+- [docs/screen-notes.md](docs/screen-notes.md): how screen frames are chosen, stored, drawn on and exported
 - [PRODUCT.md](PRODUCT.md) and [DESIGN.md](DESIGN.md): product and design direction
 - [PLAN.md](PLAN.md): the build plan and decision log
 
