@@ -1,6 +1,7 @@
 import { useLiveQuery } from 'dexie-react-hooks';
 import { useState } from 'react';
-import { ImagesIcon, PencilSimpleIcon } from '../../design/icons';
+import { Button } from '../../design/components/Button';
+import { FileZipIcon, ImagesIcon, PencilSimpleIcon } from '../../design/icons';
 import { formatDuration } from '../../lib/format';
 import type { Note } from '../../storage/db';
 import { listNoteFrames } from '../../storage/frames';
@@ -11,7 +12,18 @@ import { frameAt } from './timeline';
 import { useFrameUrls } from './useFrameUrls';
 
 /** The screen frames of a note, as a filmstrip that opens the viewer. */
-export function FramesStrip({ note, player }: { note: Note; player: AudioPlayer | null }) {
+export function FramesStrip({
+  note,
+  player,
+  onExport,
+  exporting,
+}: {
+  note: Note;
+  player: AudioPlayer | null;
+  /** Zips the note with its frames for an AI agent. */
+  onExport(): void;
+  exporting: boolean;
+}) {
   const frames = useLiveQuery(() => listNoteFrames(note.id), [note.id]);
   const urls = useFrameUrls(frames);
   const [open, setOpen] = useState<number | null>(null);
@@ -22,7 +34,7 @@ export function FramesStrip({ note, player }: { note: Note; player: AudioPlayer 
 
   return (
     <section aria-labelledby="frames-heading" className="flex flex-col gap-2">
-      <div className="flex items-baseline justify-between gap-2">
+      <div className="flex items-center justify-between gap-2">
         <h2 id="frames-heading" className="flex items-center gap-1.5 text-sm font-semibold">
           <ImagesIcon aria-hidden="true" className="size-4 text-fg-muted" />
           Screen
@@ -31,8 +43,20 @@ export function FramesStrip({ note, player }: { note: Note; player: AudioPlayer 
             {drawn > 0 ? `, ${drawn} marked up` : ''}
           </span>
         </h2>
-        <p className="hidden text-xs text-fg-muted sm:block">Open a frame to draw on it</p>
+        <Button
+          size="sm"
+          variant="soft"
+          icon={FileZipIcon}
+          onClick={onExport}
+          disabled={exporting}
+          title="A zip with a Markdown report for AI agents, an HTML page for people, the frames and the audio"
+        >
+          {exporting ? 'Preparing…' : 'Export for agent'}
+        </Button>
       </div>
+      <p className="-mt-1 text-xs text-fg-muted">
+        Open a frame to draw on it. Your marks are included when you export.
+      </p>
       <ol className="-mx-1 flex snap-x gap-2 overflow-x-auto px-1 pt-1 pb-2" data-testid="frames">
         {frames.map((frame, index) => (
           <li key={frame.id} className="shrink-0 snap-start">
