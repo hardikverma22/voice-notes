@@ -1,4 +1,4 @@
-import { db, type AudioRecord, type Bookmark, type Note, type NoteStatus } from './db';
+import { db, type AudioRecord, type Bookmark, type Frame, type Note, type NoteStatus } from './db';
 import type { Segment } from '../features/transcribe/protocol';
 import { normalizeTag } from '../lib/tags';
 
@@ -250,32 +250,42 @@ export async function applyAppendedTranscript(
   });
 }
 
-/** Deletes the note and its audio in one transaction. Returns the removed records for undo. */
-export async function deleteNote(
-  id: string,
-  database = db,
-): Promise<{ note: Note; audio: AudioRecord[] } | null> {
-  const tables = [database.notes, database.audio, database.searchChunks, database.searchIndex];
+/** Removed records for undo. */
+export interface RemovedNote {
+  note: Note;
+  audio: AudioRecord[];
+  frames?: Frame[];
+}
+
+/** Deletes the note, its audio and its screen frames in one transaction. */
+export async function deleteNote(id: string, database = db): Promise<RemovedNote | null> {
+  const tables = [
+    database.notes,
+    database.audio,
+    database.frames,
+    database.searchChunks,
+    database.searchIndex,
+  ];
   return database.transaction('rw', tables, async () => {
     const note = await database.notes.get(id);
     if (!note) return null;
     const audio = await database.audio.where('noteId').equals(id).toArray();
+    const frames = await database.frames.where('noteId').equals(id).toArray();
     await database.notes.delete(id);
     await database.audio.where('noteId').equals(id).delete();
+    await database.frames.where('noteId').equals(id).delete();
     // Search passages hold the note's text; they go with it (Undo re-indexes).
     await database.searchChunks.where('noteId').equals(id).delete();
     await database.searchIndex.delete(id);
-    return { note, audio };
+    return { note, audio, frames };
   });
 }
 
-export async function restoreNote(
-  removed: { note: Note; audio: AudioRecord[] },
-  database = db,
-): Promise<void> {
-  await database.transaction('rw', [database.notes, database.audio], async () => {
+export async function restoreNote(removed: RemovedNote, database = db): Promise<void> {
+  await database.transaction('rw', [database.notes, database.audio, database.frames], async () => {
     await database.notes.put(removed.note);
     if (removed.audio.length > 0) await database.audio.bulkPut(removed.audio);
+    if (removed.frames?.length) await database.frames.bulkPut(removed.frames);
   });
 }
 
@@ -289,10 +299,17 @@ export function listUnfinishedNotes(database = db): Promise<Note[]> {
 }
 
 export async function deleteAllNotes(database = db): Promise<void> {
-  const tables = [database.notes, database.audio, database.searchChunks, database.searchIndex];
+  const tables = [
+    database.notes,
+    database.audio,
+    database.frames,
+    database.searchChunks,
+    database.searchIndex,
+  ];
   await database.transaction('rw', tables, async () => {
     await database.notes.clear();
     await database.audio.clear();
+    await database.frames.clear();
     await database.searchChunks.clear();
     await database.searchIndex.clear();
   });

@@ -75,12 +75,41 @@ export interface SearchIndexEntry {
   indexedAt: number;
 }
 
+/** One mark drawn over a frame. Points are 0..1 of the frame's width and height. */
+export interface Stroke {
+  id: string;
+  tool: 'pen' | 'highlighter' | 'arrow' | 'box';
+  color: string;
+  points: [number, number][];
+}
+
+/**
+ * A still of the shared screen, taken while recording. t is seconds from the start of the
+ * note's audio. sessionId is set while the recording is running, so an interrupted recording
+ * keeps its frames; noteId is set once the recording is saved.
+ */
+export interface Frame {
+  id: string;
+  noteId: string | null;
+  sessionId: string | null;
+  t: number;
+  blob: Blob;
+  mimeType: string;
+  width: number;
+  height: number;
+  /** auto: the screen changed. manual: the person took it. */
+  source: 'auto' | 'manual';
+  strokes: Stroke[];
+  createdAt: number;
+}
+
 export class VoiceNotesDB extends Dexie {
   notes!: EntityTable<Note, 'id'>;
   audio!: EntityTable<AudioRecord, 'id'>;
   audioChunks!: EntityTable<AudioChunk, 'seq'>;
   searchChunks!: EntityTable<SearchChunk, 'id'>;
   searchIndex!: EntityTable<SearchIndexEntry, 'noteId'>;
+  frames!: EntityTable<Frame, 'id'>;
   constructor(name = 'voice-notes') {
     super(name);
     this.version(1).stores({
@@ -126,6 +155,14 @@ export class VoiceNotesDB extends Dexie {
       audioChunks: '++seq, sessionId, [sessionId+index]',
       searchChunks: 'id, noteId',
       searchIndex: 'noteId',
+    });
+    this.version(5).stores({
+      notes: 'id, createdAt, updatedAt, status, *tags',
+      audio: 'id, noteId',
+      audioChunks: '++seq, sessionId, [sessionId+index]',
+      searchChunks: 'id, noteId',
+      searchIndex: 'noteId',
+      frames: 'id, noteId, sessionId',
     });
   }
 }

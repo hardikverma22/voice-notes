@@ -1,0 +1,93 @@
+import { useCallback, useEffect, useRef, useState } from 'react';
+import { addSessionFrame } from '../../storage/frames';
+import {
+  ScreenCaptureError,
+  isScreenCaptureSupported,
+  startScreenCapture,
+  type ScreenCapture,
+  type ScreenCaptureErrorCode,
+} from './screenCapture';
+
+export type ScreenStatus = 'off' | 'starting' | 'on';
+
+interface Options {
+  /** The recording session frames belong to. */
+  getSessionId(): string | null;
+  /** Seconds into the recording, for each frame's time. */
+  getTime(): number;
+  isPaused(): boolean;
+  onError(code: ScreenCaptureErrorCode): void;
+}
+
+/**
+ * The screen share that runs alongside a recording. Every frame is written to IndexedDB under
+ * the recording's session as soon as it is taken, so an interrupted recording keeps them.
+ */
+export function useScreenSession(options: Options) {
+  const optionsRef = useRef(options);
+  useEffect(() => {
+    optionsRef.current = options;
+  });
+  const captureRef = useRef<ScreenCapture | null>(null);
+  const [status, setStatus] = useState<ScreenStatus>('off');
+  const [frameCount, setFrameCount] = useState(0);
+  const [lastFrameAt, setLastFrameAt] = useState<number | null>(null);
+
+  const stop = useCallback(() => {
+    captureRef.current?.stop();
+    captureRef.current = null;
+    setStatus('off');
+  }, []);
+
+  /** Starts sharing. Resolves to false when the person cancelled or it failed. */
+  const start = useCallback(async (): Promise<boolean> => {
+    if (captureRef.current) return true;
+    setStatus('starting');
+    try {
+      captureRef.current = await startScreenCapture({
+        isPaused: () => optionsRef.current.isPaused(),
+        onEnded: () => {
+          captureRef.current = null;
+          setStatus('off');
+        },
+        onFrame: (image, source) => {
+          const sessionId = optionsRef.current.getSessionId();
+          if (!sessionId) return;
+          const t = optionsRef.current.getTime();
+          addSessionFrame(sessionId, { ...image, t, source })
+            .then(() => {
+              setFrameCount((count) => count + 1);
+              setLastFrameAt(Date.now());
+            })
+            .catch((error: unknown) => console.error('Could not save a screen frame', error));
+        },
+      });
+      setStatus('on');
+      return true;
+    } catch (error) {
+      setStatus('off');
+      const code = error instanceof ScreenCaptureError ? error.code : 'unknown';
+      if (code !== 'denied') optionsRef.current.onError(code);
+      return false;
+    }
+  }, []);
+
+  const snap = useCallback(() => void captureRef.current?.snap(), []);
+  const reset = useCallback(() => {
+    setFrameCount(0);
+    setLastFrameAt(null);
+  }, []);
+
+  useEffect(() => () => captureRef.current?.stop(), []);
+
+  return {
+    status,
+    frameCount,
+    lastFrameAt,
+    supported: isScreenCaptureSupported(),
+    start,
+    stop,
+    snap,
+    reset,
+  };
+}

@@ -1,4 +1,5 @@
 import { createContext, useContext } from 'react';
+import type { ScreenStatus } from '../screen/useScreenSession';
 import type { LiveState } from '../transcribe/merge';
 import type { RecorderErrorCode } from './recorder';
 import type { RecorderState } from './useRecorder';
@@ -15,12 +16,27 @@ export interface RecordingContextValue {
   targetNoteId: string | null;
   /** Moments marked during this recording; they become bookmarks. */
   markCount: number;
+  /** The screen shared alongside this recording, if any. */
+  screen: {
+    status: ScreenStatus;
+    frameCount: number;
+    /** Date.now() of the newest frame, for a brief flash in the UI. */
+    lastFrameAt: number | null;
+    supported: boolean;
+  };
   start(): void;
   /** Records more audio onto the end of an existing note. */
   startFor(noteId: string): void;
   /** Marks the current moment of the recording. */
   mark(): void;
   stop(): void;
+  /** Picks a screen to share, then starts recording. Must run from a click. */
+  startWithScreen(): void;
+  /** Shares a screen during the running recording. Must run from a click. */
+  shareScreen(): void;
+  stopScreen(): void;
+  /** Takes a frame of the shared screen now. */
+  snap(): void;
   pause(): void;
   resume(): void;
   discard(): void;
