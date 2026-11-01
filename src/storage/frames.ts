@@ -69,3 +69,14 @@ export async function deleteFrame(id: string, database = db): Promise<Frame | un
 export async function restoreFrame(frame: Frame, database = db): Promise<void> {
   await database.frames.put(frame);
 }
+
+/** How many frames each note has. Reads only the index, not the images. */
+export async function frameCountsByNote(database = db): Promise<Map<string, number>> {
+  const counts = new Map<string, number>();
+  const keys = await database.frames.orderBy('noteId').keys();
+  for (const key of keys) {
+    if (typeof key !== 'string') continue;
+    counts.set(key, (counts.get(key) ?? 0) + 1);
+  }
+  return counts;
+}

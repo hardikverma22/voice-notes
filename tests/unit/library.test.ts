@@ -3,6 +3,7 @@ import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { VoiceNotesDB } from '../../src/storage/db';
 import { appendChunk, finalizeSession, replaceNoteAudio } from '../../src/storage/audio';
 import { exportZipBackup, importAnyBackup } from '../../src/storage/backup';
+import { addSessionFrame, adoptSessionFrames, setFrameStrokes } from '../../src/storage/frames';
 import {
   addBookmark,
   applyAppendedTranscript,
@@ -159,7 +160,7 @@ describe('append a recording', () => {
 });
 
 describe('zip backup', () => {
-  it('round-trips notes with tags, bookmarks and audio, and skips existing notes', async () => {
+  it('round-trips notes with tags, bookmarks, audio and frames, and skips existing notes', async () => {
     const note = await createNote(base, database);
     const sid = crypto.randomUUID();
     await appendChunk(sid, 0, new Blob(['audio-bytes']), 'audio/webm', database);
@@ -167,16 +168,39 @@ describe('zip backup', () => {
     await database.notes.update(note.id, { audioId: audio.id });
     await setTags(note.id, ['Work'], database);
     await addBookmark(note.id, 1, 'Key point', database);
+    const image = { mimeType: 'image/webp', width: 8, height: 4, source: 'auto' as const };
+    const frame = await addSessionFrame(sid, { ...image, blob: new Blob(['px']), t: 2 }, database);
+    await adoptSessionFrames(sid, note.id, 0, database);
+    const stroke = {
+      id: 's',
+      tool: 'arrow' as const,
+      color: '#f00',
+      points: [
+        [0, 0],
+        [1, 1],
+      ] as [number, number][],
+    };
+    await setFrameStrokes(frame.id, [stroke], database);
+    // A frame of a recording still running is not part of any note, so it is not backed up.
+    await addSessionFrame('live', { ...image, blob: new Blob(['live']), t: 0 }, database);
 
-    const { blob, notes, recordings } = await exportZipBackup(database);
-    expect([notes, recordings]).toEqual([1, 1]);
+    const { blob, notes, recordings, frames } = await exportZipBackup(database);
+    expect([notes, recordings, frames]).toEqual([1, 1, 1]);
     const file = new File([blob], 'backup.zip');
 
-    expect(await importAnyBackup(file, database)).toEqual({ notes: 0, recordings: 0 });
+    expect(await importAnyBackup(file, database)).toEqual({ notes: 0, recordings: 0, frames: 0 });
 
     const other = new VoiceNotesDB('test-' + crypto.randomUUID());
     try {
-      expect(await importAnyBackup(file, other)).toEqual({ notes: 1, recordings: 1 });
+      expect(await importAnyBackup(file, other)).toEqual({ notes: 1, recordings: 1, frames: 1 });
+      const [restoredFrame] = await other.frames.toArray();
+      expect(restoredFrame).toMatchObject({
+        noteId: note.id,
+        t: 2,
+        sessionId: null,
+        strokes: [stroke],
+      });
+      expect(await restoredFrame!.blob.text()).toBe('px');
       const restored = await getNote(note.id, other);
       expect(restored?.tags).toEqual(['Work']);
       expect(restored?.bookmarks[0]?.label).toBe('Key point');

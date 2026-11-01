@@ -223,13 +223,30 @@ export function FrameViewer({
       onKeyDown={onKeyDown}
       className="fixed inset-0 z-50 flex flex-col bg-[#0b0b0c]/95 text-white outline-none backdrop-blur-sm"
     >
-      <header className="flex flex-wrap items-center gap-2 px-3 py-2 sm:px-4">
+      <header className="flex flex-wrap items-center gap-x-2 gap-y-1 px-3 py-2 sm:px-4">
         <p className="tabular mr-auto text-sm font-medium">
           Frame {index + 1} <span className="text-white/60">of {frames.length}</span>
           <span className="text-white/60"> · {formatDuration(frame.t * 1000)}</span>
         </p>
 
-        <div role="toolbar" aria-label="Drawing tools" className="flex items-center gap-1">
+        <div className="flex items-center gap-0.5 sm:gap-1">
+          {player ? (
+            <ViewerButton label="Play from here" icon={PlayIcon} onClick={playFromHere} />
+          ) : null}
+          <ViewerButton label="Copy image" icon={CopyIcon} onClick={() => void copyImage()} />
+          <ViewerButton
+            label="Download image"
+            icon={DownloadSimpleIcon}
+            onClick={() => void download()}
+          />
+          <ViewerButton label="Delete frame" icon={TrashIcon} onClick={() => void remove()} />
+          <ViewerButton label="Close" icon={XIcon} onClick={onClose} />
+        </div>
+        <div
+          role="toolbar"
+          aria-label="Drawing tools"
+          className="flex w-full items-center justify-start gap-1 overflow-x-auto sm:justify-center"
+        >
           {TOOLS.map((entry) => {
             const ToolIcon = TOOL_ICON[entry.tool];
             return (
@@ -252,7 +269,7 @@ export function FrameViewer({
                 aria-checked={color === ink.value}
                 aria-label={ink.name}
                 onClick={() => setColor(ink.value)}
-                className="flex size-8 items-center justify-center rounded-full focus-visible:outline-2 focus-visible:outline-white"
+                className="flex size-8 shrink-0 items-center justify-center rounded-full focus-visible:outline-2 focus-visible:outline-white"
               >
                 <span
                   className={`size-5 rounded-full border border-white/30 transition-transform ${color === ink.value ? 'scale-110 ring-2 ring-white ring-offset-2 ring-offset-[#0b0b0c]' : ''}`}
@@ -274,21 +291,6 @@ export function FrameViewer({
             onClick={() => save([])}
             disabled={strokes.length === 0}
           />
-        </div>
-
-        <div className="flex items-center gap-1">
-          <span className="mx-1 h-6 w-px bg-white/15" aria-hidden="true" />
-          {player ? (
-            <ViewerButton label="Play from here" icon={PlayIcon} onClick={playFromHere} />
-          ) : null}
-          <ViewerButton label="Copy image" icon={CopyIcon} onClick={() => void copyImage()} />
-          <ViewerButton
-            label="Download image"
-            icon={DownloadSimpleIcon}
-            onClick={() => void download()}
-          />
-          <ViewerButton label="Delete frame" icon={TrashIcon} onClick={() => void remove()} />
-          <ViewerButton label="Close" icon={XIcon} onClick={onClose} />
         </div>
       </header>
 
@@ -371,7 +373,7 @@ function ViewerButton({
       aria-pressed={pressed}
       onClick={onClick}
       disabled={disabled}
-      className={`flex size-9 items-center justify-center rounded-full text-white/80 transition-colors hover:bg-white/10 hover:text-white focus-visible:outline-2 focus-visible:outline-white disabled:opacity-30 aria-pressed:bg-white aria-pressed:text-black ${className}`}
+      className={`flex size-9 shrink-0 items-center justify-center rounded-full text-white/80 transition-colors hover:bg-white/10 hover:text-white focus-visible:outline-2 focus-visible:outline-white disabled:opacity-30 aria-pressed:bg-white aria-pressed:text-black ${className}`}
     >
       <IconComponent aria-hidden="true" weight="bold" className="size-[1.1rem]" />
     </button>

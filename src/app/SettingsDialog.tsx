@@ -491,12 +491,12 @@ function DataSection({ open }: { open: boolean }) {
     setBusy('export');
     try {
       const { exportZipBackup } = await import('../storage/backup');
-      const { blob, notes, recordings } = await exportZipBackup();
+      const { blob, notes, recordings, frames } = await exportZipBackup();
       const stamp = new Date().toISOString().slice(0, 10);
       downloadBlob(`voice-notes-backup-${stamp}.zip`, blob);
       toast.show({
         tone: 'success',
-        message: `Backed up ${plural(notes, 'note')} and ${plural(recordings, 'recording')} (${formatBytes(blob.size)})`,
+        message: `Backed up ${plural(notes, 'note')} and ${plural(recordings, 'recording')}${frames ? `, with ${plural(frames, 'screen frame')}` : ''} (${formatBytes(blob.size)})`,
       });
     } catch (error) {
       console.error('Backup failed', error);
