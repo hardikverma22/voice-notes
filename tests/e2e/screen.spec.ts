@@ -20,19 +20,22 @@ test.describe('screen recording', () => {
     });
 
     await page.goto('/');
-    await page.getByRole('button', { name: 'Record with screen' }).click();
-    await expect(page.getByText('Sharing screen')).toBeVisible();
+    await page.getByRole('radio', { name: 'Voice + screen' }).click();
+    await page.getByRole('button', { name: 'Start screen recording' }).click();
+    const shared = page.getByRole('region', { name: 'Shared screen' });
+    await expect(shared).toBeVisible();
+    await expect(shared.getByLabel('Live preview of the shared screen')).toBeVisible();
     await expect(page.getByText('Recording', { exact: true }).first()).toBeVisible();
 
     // The first frame is kept automatically once the screen holds still; S takes another.
-    await expect(page.getByText(/· [1-9]\d* frames?/)).toBeVisible({ timeout: 10_000 });
+    await expect(page.getByText(/^[1-9]\d* frames? kept$/)).toBeVisible({ timeout: 10_000 });
     await page.waitForTimeout(500);
     await page.keyboard.press('s');
-    await expect(page.getByText(/· ([2-9]|\d{2,}) frames/)).toBeVisible();
+    await expect(page.getByText(/^([2-9]|\d{2,}) frames kept$/)).toBeVisible();
     await expectNoAxeViolations(page);
 
     await page.getByRole('button', { name: 'Stop recording' }).click();
-    await expect(page.getByText('Sharing screen')).toBeHidden();
+    await expect(shared).toBeHidden();
     await page.getByRole('button', { name: 'Open note' }).click();
 
     const strip = page.getByTestId('frames');
@@ -41,7 +44,10 @@ test.describe('screen recording', () => {
     // Each frame also shows as a tick on the audio timeline.
     const frameCount = await strip.getByRole('button').count();
     await expect(page.getByTestId('frame-ticks').locator('button')).toHaveCount(frameCount);
+    // The stage shows a frame; Mark up opens the full-screen viewer on it.
     await strip.getByRole('button').first().click();
+    await expect(page.getByTestId('frame-stage')).toContainText(/^.*1\/\d+/);
+    await page.getByRole('button', { name: /^Mark up/ }).click();
 
     const viewer = page.getByRole('dialog', { name: /^Frame 1 of/ });
     await expect(viewer).toBeVisible();
@@ -75,6 +81,16 @@ test.describe('screen recording', () => {
     await expect(markedUp).toHaveCount(1);
     await page.reload();
     await expect(markedUp).toHaveCount(1);
+
+    // Replay: playing from frame 1 moves the viewer to the next frame on its own.
+    await page.getByTestId('frames').getByRole('button').first().click();
+    await page.getByRole('button', { name: /^Mark up/ }).click();
+    const replay = page.getByRole('dialog', { name: /^Frame 1 of/ });
+    await expect(replay).toBeVisible();
+    await replay.getByRole('button', { name: 'Play from this frame' }).click();
+    await expect(page.getByRole('dialog', { name: /^Frame 2 of/ })).toBeVisible({ timeout: 8000 });
+    await page.getByRole('dialog').getByRole('button', { name: 'Pause' }).click();
+    await page.keyboard.press('Escape');
 
     // Export for agent: a zip with the reports, the frames with marks flattened in, and audio.
     const downloading = page.waitForEvent('download');

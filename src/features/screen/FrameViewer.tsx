@@ -8,6 +8,7 @@ import {
   CopyIcon,
   DownloadSimpleIcon,
   HighlighterIcon,
+  PauseIcon,
   PencilSimpleIcon,
   PlayIcon,
   SelectionSlashIcon,
@@ -25,13 +26,20 @@ import type { AudioPlayer } from '../notes/useAudioPlayer';
 import type { Segment } from '../transcribe/protocol';
 import { INK, TOOLS, flattenFrame, isNegligible, thin, type Tool } from './annotation';
 import { StrokeLayer } from './FrameImage';
-import { pairSpeech } from './timeline';
+import { frameDuring, pairSpeech, playFrom, segmentAt } from './timeline';
 
 const TOOL_ICON: Record<Tool, Icon> = {
   pen: PencilSimpleIcon,
   highlighter: HighlighterIcon,
   arrow: ArrowUpRightIcon,
   box: SquareIcon,
+};
+
+const TOOL_HINT: Record<Tool, string> = {
+  pen: 'Draw freehand',
+  highlighter: 'Highlight text or an area',
+  arrow: 'Point at something',
+  box: 'Frame an area',
 };
 
 const FOCUSABLE = 'button:not([disabled]), [href], [tabindex]:not([tabindex="-1"])';
@@ -74,7 +82,16 @@ export function FrameViewer({
     setDraft(null);
   }
 
-  const speech = pairSpeech(frames, segments)[index]?.text ?? '';
+  const spoken = pairSpeech(frames, segments)[index]?.segments ?? [];
+  const playing = player?.playing ?? false;
+  const now = player?.currentTime ?? 0;
+  const speaking = playing ? segmentAt(spoken, now) : -1;
+
+  // Replay: while the audio plays, show the frame that was on screen at that moment.
+  const following = playing ? frameDuring(frames, now) : -1;
+  useEffect(() => {
+    if (following >= 0 && following !== index && !draft) onIndex(following);
+  }, [following, index, draft, onIndex]);
 
   const save = useCallback(
     (next: Stroke[]) => {
@@ -94,9 +111,12 @@ export function FrameViewer({
   const go = useCallback(
     (delta: number) => {
       const next = index + delta;
-      if (next >= 0 && next < frames.length) onIndex(next);
+      if (next < 0 || next >= frames.length) return;
+      // While replaying, jump the audio too, or playback would pull the old frame back.
+      if (player?.playing) player.seek(playFrom(frames[next]!));
+      onIndex(next);
     },
-    [index, frames.length, onIndex],
+    [index, frames, onIndex, player],
   );
 
   // Focus, scroll lock, and focus return.
@@ -115,6 +135,9 @@ export function FrameViewer({
     if (event.key === 'Escape') {
       event.stopPropagation();
       onClose();
+    } else if (event.key === ' ' && player && !(event.target as Element).closest('button')) {
+      event.preventDefault();
+      togglePlay();
     } else if (event.key === 'ArrowRight') go(1);
     else if (event.key === 'ArrowLeft') go(-1);
     else if ((event.metaKey || event.ctrlKey) && event.key.toLowerCase() === 'z') {
@@ -205,10 +228,20 @@ export function FrameViewer({
     });
   }
 
-  function playFromHere() {
+  /** Plays from this frame (or resumes inside it); frames then follow the audio. */
+  function togglePlay() {
     if (!player) return;
-    player.seek(Math.max(0, frame.t - 1));
+    if (player.playing) {
+      player.toggle();
+      return;
+    }
+    if (frameDuring(frames, player.currentTime) !== index) player.seek(playFrom(frame));
     player.play();
+  }
+
+  function seekToFrame(target: number) {
+    if (player) player.seek(playFrom(frames[target]!));
+    onIndex(target);
   }
 
   const shown = draft ? [...strokes, draft] : strokes;
@@ -221,7 +254,7 @@ export function FrameViewer({
       aria-label={`Frame ${index + 1} of ${frames.length}`}
       tabIndex={-1}
       onKeyDown={onKeyDown}
-      className="fixed inset-0 z-50 flex flex-col bg-[#0b0b0c]/95 text-white outline-none backdrop-blur-sm"
+      className="vn-on-dark fixed inset-0 z-50 flex flex-col bg-[#0b0b0c]/95 text-white outline-none backdrop-blur-sm"
     >
       <header className="flex flex-wrap items-center gap-x-2 gap-y-1 px-3 py-2 sm:px-4">
         <p className="tabular mr-auto text-sm font-medium">
@@ -230,22 +263,31 @@ export function FrameViewer({
         </p>
 
         <div className="flex items-center gap-0.5 sm:gap-1">
-          {player ? (
-            <ViewerButton label="Play from here" icon={PlayIcon} onClick={playFromHere} />
-          ) : null}
-          <ViewerButton label="Copy image" icon={CopyIcon} onClick={() => void copyImage()} />
+          <ViewerButton
+            label="Copy image"
+            hint="With your marks, ready to paste into ChatGPT, Claude, Slack or an issue"
+            icon={CopyIcon}
+            onClick={() => void copyImage()}
+          />
           <ViewerButton
             label="Download image"
+            hint="Saves this frame with your marks"
             icon={DownloadSimpleIcon}
             onClick={() => void download()}
           />
-          <ViewerButton label="Delete frame" icon={TrashIcon} onClick={() => void remove()} />
-          <ViewerButton label="Close" icon={XIcon} onClick={onClose} />
+          <ViewerButton
+            label="Delete frame"
+            hint="You can undo this"
+            icon={TrashIcon}
+            onClick={() => void remove()}
+            tipAlign="end"
+          />
+          <ViewerButton label="Close" hint="Esc" icon={XIcon} onClick={onClose} tipAlign="end" />
         </div>
         <div
           role="toolbar"
           aria-label="Drawing tools"
-          className="flex w-full items-center justify-start gap-1 overflow-x-auto sm:justify-center"
+          className="flex w-full items-center justify-start gap-1 overflow-x-auto sm:justify-center sm:overflow-visible"
         >
           {TOOLS.map((entry) => {
             const ToolIcon = TOOL_ICON[entry.tool];
@@ -253,6 +295,7 @@ export function FrameViewer({
               <ViewerButton
                 key={entry.tool}
                 label={`${entry.label} (${entry.key})`}
+                hint={TOOL_HINT[entry.tool]}
                 icon={ToolIcon}
                 pressed={tool === entry.tool}
                 onClick={() => setTool(entry.tool)}
@@ -268,6 +311,7 @@ export function FrameViewer({
                 role="radio"
                 aria-checked={color === ink.value}
                 aria-label={ink.name}
+                data-tip={ink.name}
                 onClick={() => setColor(ink.value)}
                 className="flex size-8 shrink-0 items-center justify-center rounded-full focus-visible:outline-2 focus-visible:outline-white"
               >
@@ -280,13 +324,15 @@ export function FrameViewer({
           </div>
           <span className="mx-1 h-6 w-px bg-white/15" aria-hidden="true" />
           <ViewerButton
-            label="Undo (⌘Z)"
+            label="Undo"
+            hint="⌘Z / Ctrl+Z"
             icon={UndoIcon}
             onClick={undo}
             disabled={strokes.length === 0}
           />
           <ViewerButton
             label="Clear drawing"
+            hint="Removes every mark on this frame"
             icon={SelectionSlashIcon}
             onClick={() => save([])}
             disabled={strokes.length === 0}
@@ -297,6 +343,8 @@ export function FrameViewer({
       <div className="relative flex min-h-0 flex-1 items-center justify-center px-12 py-2 sm:px-16">
         <ViewerButton
           label="Previous frame"
+          hint="←"
+          tipAlign="start"
           icon={ArrowLeftIcon}
           onClick={() => go(-1)}
           disabled={index === 0}
@@ -322,6 +370,8 @@ export function FrameViewer({
         </div>
         <ViewerButton
           label="Next frame"
+          hint="→"
+          tipAlign="end"
           icon={ArrowRightIcon}
           onClick={() => go(1)}
           disabled={index === frames.length - 1}
@@ -329,20 +379,37 @@ export function FrameViewer({
         />
       </div>
 
-      <footer className="mx-auto w-full max-w-3xl px-4 pt-1 pb-4">
-        <p className="line-clamp-3 text-center text-[0.95rem] text-pretty text-white/85">
-          {speech ? (
-            <>
-              <span className="mr-1 text-white/50">“</span>
-              {speech}
-              <span className="ml-1 text-white/50">”</span>
-            </>
+      <footer className="mx-auto flex w-full max-w-4xl flex-col gap-3 px-4 pt-1 pb-4">
+        <p
+          className="line-clamp-3 min-h-[1.5em] text-center text-[0.95rem] text-pretty"
+          aria-live={playing ? 'off' : 'polite'}
+        >
+          {spoken.length > 0 ? (
+            spoken.map((segment, i) => (
+              <span
+                key={`${segment.start}:${i}`}
+                className={`transition-colors duration-200 ${speaking === -1 ? 'text-white/85' : i === speaking ? 'text-white' : 'text-white/40'}`}
+              >
+                {i > 0 ? ' ' : ''}
+                {segment.text.trim()}
+              </span>
+            ))
           ) : (
             <span className="text-white/50">Nothing was said while this frame was on screen.</span>
           )}
         </p>
-        <p className="mt-2 hidden text-center text-xs text-white/45 sm:block">
-          Drag on the frame to draw · 1–4 switch tools · ← → move between frames · Esc closes
+        {player ? (
+          <ReplayBar
+            frames={frames}
+            index={index}
+            player={player}
+            onPlay={togglePlay}
+            onFrame={seekToFrame}
+          />
+        ) : null}
+        <p className="hidden text-center text-xs text-white/45 sm:block">
+          Drag on the frame to draw · 1–4 tools · ← → frames
+          {player ? ' · Space plays, and frames follow your voice' : ''} · Esc closes
         </p>
       </footer>
     </div>,
@@ -352,13 +419,20 @@ export function FrameViewer({
 
 function ViewerButton({
   label,
+  hint,
   icon: IconComponent,
   onClick,
   pressed,
   disabled,
+  tipAlign,
+  tipSide,
   className = '',
 }: {
   label: string;
+  /** Second tooltip line: what it does, or its shortcut. */
+  hint?: string;
+  tipAlign?: 'start' | 'end';
+  tipSide?: 'top';
   icon: Icon;
   onClick(): void;
   pressed?: boolean;
@@ -369,7 +443,9 @@ function ViewerButton({
     <button
       type="button"
       aria-label={label}
-      title={label}
+      data-tip={hint ? `${label}\n${hint}` : label}
+      data-tip-align={tipAlign}
+      data-tip-side={tipSide}
       aria-pressed={pressed}
       onClick={onClick}
       disabled={disabled}
@@ -377,6 +453,111 @@ function ViewerButton({
     >
       <IconComponent aria-hidden="true" weight="bold" className="size-[1.1rem]" />
     </button>
+  );
+}
+
+/**
+ * Play / pause and a scrubber for the recording, with a tick for each frame. The current
+ * frame's tick is bright; click a tick to jump to that frame.
+ */
+function ReplayBar({
+  frames,
+  index,
+  player,
+  onPlay,
+  onFrame,
+}: {
+  frames: Frame[];
+  index: number;
+  player: AudioPlayer;
+  onPlay(): void;
+  onFrame(index: number): void;
+}) {
+  const trackRef = useRef<HTMLDivElement>(null);
+  const duration = Math.max(player.duration, frames[frames.length - 1]?.t ?? 0, 0.001);
+  const at = (t: number) => `${Math.min(100, Math.max(0, (t / duration) * 100))}%`;
+
+  function seekFromPointer(clientX: number) {
+    const rect = trackRef.current?.getBoundingClientRect();
+    if (!rect) return;
+    player.seek(Math.min(1, Math.max(0, (clientX - rect.left) / rect.width)) * duration);
+  }
+
+  return (
+    <div className="flex items-center gap-3" data-testid="replay-bar">
+      <button
+        type="button"
+        onClick={onPlay}
+        aria-label={player.playing ? 'Pause' : 'Play from this frame'}
+        data-tip={
+          player.playing ? 'Pause\nSpace' : 'Play from this frame\nFrames follow along · Space'
+        }
+        data-tip-side="top"
+        data-tip-align="start"
+        className="flex size-11 shrink-0 items-center justify-center rounded-full bg-white text-black shadow-lg transition-transform active:scale-95 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-white"
+      >
+        {player.playing ? (
+          <PauseIcon aria-hidden="true" weight="fill" className="size-5" />
+        ) : (
+          <PlayIcon aria-hidden="true" weight="fill" className="ml-0.5 size-5" />
+        )}
+      </button>
+      <span className="tabular w-10 shrink-0 text-right text-xs text-white/70">
+        {formatDuration(player.currentTime * 1000)}
+      </span>
+      <div
+        ref={trackRef}
+        role="slider"
+        tabIndex={0}
+        aria-label="Playback position"
+        aria-valuemin={0}
+        aria-valuemax={Math.round(duration)}
+        aria-valuenow={Math.round(player.currentTime)}
+        aria-valuetext={`${formatDuration(player.currentTime * 1000)} of ${formatDuration(duration * 1000)}`}
+        onPointerDown={(event) => {
+          event.currentTarget.setPointerCapture(event.pointerId);
+          seekFromPointer(event.clientX);
+        }}
+        onPointerMove={(event) => {
+          if (event.buttons === 1) seekFromPointer(event.clientX);
+        }}
+        onKeyDown={(event) => {
+          if (event.key !== 'ArrowLeft' && event.key !== 'ArrowRight') return;
+          event.preventDefault();
+          event.stopPropagation();
+          player.skip(event.key === 'ArrowLeft' ? -5 : 5);
+        }}
+        className="group relative flex h-8 min-w-0 flex-1 cursor-pointer items-center focus-visible:outline-2 focus-visible:outline-white"
+      >
+        <span className="absolute inset-x-0 h-1 rounded-full bg-white/20" />
+        <span
+          className="absolute left-0 h-1 rounded-full bg-white"
+          style={{ width: at(player.currentTime) }}
+        />
+        {frames.map((frame, i) => (
+          <span
+            key={frame.id}
+            aria-hidden="true"
+            onPointerDown={(event) => {
+              // A tick jumps to its frame; ← → are the keyboard path.
+              event.stopPropagation();
+              onFrame(i);
+            }}
+            data-tip={`Frame ${i + 1} · ${formatDuration(frame.t * 1000)}`}
+            data-tip-side="top"
+            className="absolute flex h-8 w-3 -translate-x-1/2 items-center justify-center"
+            style={{ left: at(frame.t) }}
+          >
+            <span
+              className={`h-3.5 w-1 rounded-full transition-colors ${i === index ? 'bg-white' : 'bg-white/45'}`}
+            />
+          </span>
+        ))}
+      </div>
+      <span className="tabular w-10 shrink-0 text-xs text-white/70">
+        {formatDuration(duration * 1000)}
+      </span>
+    </div>
   );
 }
 

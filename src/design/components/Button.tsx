@@ -59,6 +59,8 @@ export interface IconButtonProps extends ButtonHTMLAttributes<HTMLButtonElement>
   label: string;
   size?: Size;
   active?: boolean;
+  /** A second line in the tooltip, for what the button does beyond its name. */
+  hint?: string;
 }
 
 /** Square icon-only button. The label is the accessible name and the tooltip. */
@@ -68,6 +70,7 @@ export const IconButton = forwardRef<HTMLButtonElement, IconButtonProps>(functio
     label,
     size = 'md',
     active = false,
+    hint,
     className = '',
     type = 'button',
     ...props
@@ -80,7 +83,7 @@ export const IconButton = forwardRef<HTMLButtonElement, IconButtonProps>(functio
       ref={ref}
       type={type}
       aria-label={label}
-      title={label}
+      data-tip={hint ? `${label}\n${hint}` : label}
       className={`inline-flex shrink-0 items-center justify-center rounded-full transition-[background-color,color,transform] duration-(--vn-dur-fast) active:scale-[0.94] disabled:pointer-events-none disabled:opacity-40 ${focusRing} ${box} ${active ? 'bg-accent-soft text-accent' : 'text-fg-muted hover:bg-surface-2 hover:text-fg'} ${className}`}
       {...props}
     >

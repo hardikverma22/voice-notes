@@ -7,6 +7,7 @@ import {
   ArrowRightIcon,
   CheckIcon,
   LockSimpleIcon,
+  MicrophoneIcon,
   MonitorIcon,
   PauseIcon,
   PlayIcon,
@@ -19,7 +20,9 @@ import { NotesLibrary } from '../notes/NotesLibrary';
 import { MarkButton } from '../notes/RecordMorePanel';
 import { StatusBadge } from '../notes/StatusBadge';
 import { RecordButton } from '../recorder/RecordButton';
+import { useCaptureMode } from '../screen/captureMode';
 import { ScreenControls } from '../screen/ScreenControls';
+import { Segmented } from '../../design/components/Segmented';
 import { useRecording } from '../recorder/recordingContext';
 import type { RecorderErrorCode } from '../recorder/recorder';
 import { useAudioLevel } from '../recorder/useAudioLevel';
@@ -54,7 +57,13 @@ export default function HomePage() {
   const paused = rec.state === 'paused';
   const level = useAudioLevel(rec.analyser, rec.state === 'recording');
 
-  useSpaceToggle(rec.toggle, rec.state !== 'requesting' && rec.state !== 'stopping');
+  const [mode, setMode] = useCaptureMode();
+  const withScreen = mode === 'screen' && rec.screen.supported;
+  const idle = rec.state === 'idle' || rec.state === 'error';
+  const toggle = () => (withScreen && idle ? rec.startWithScreen() : rec.toggle());
+  const choosing = rec.screen.status === 'starting' && idle;
+
+  useSpaceToggle(toggle, rec.state !== 'requesting' && rec.state !== 'stopping' && !choosing);
 
   const today = new Intl.DateTimeFormat(undefined, {
     weekday: 'long',
@@ -117,14 +126,46 @@ export default function HomePage() {
                 {greeting()} <span className="text-fg-muted italic">What&apos;s on your mind?</span>
               </h1>
               <p className="mt-3 max-w-md text-[0.95rem] text-fg-muted text-pretty">
-                Tap the mic and think out loud. It&apos;s transcribed right here on your device —
-                nothing is uploaded.
+                {withScreen ? (
+                  <>
+                    Share your screen and talk it through. Frames are kept as the screen changes,
+                    ready to mark up and hand to an AI agent. All on this device.
+                  </>
+                ) : (
+                  <>
+                    Tap the mic and think out loud. It&apos;s transcribed right here on your device
+                    — nothing is uploaded.
+                  </>
+                )}
               </p>
             </m.div>
           )}
         </AnimatePresence>
 
-        <div className="mt-8 flex items-center justify-center gap-6">
+        <AnimatePresence initial={false}>
+          {!active && rec.screen.supported ? (
+            <m.div
+              key="mode"
+              initial={{ opacity: 0, y: 4 }}
+              animate={{ opacity: 1, y: 0 }}
+              exit={{ opacity: 0, transition: { duration: 0.1 } }}
+              className="mt-6 flex flex-col items-center gap-2"
+            >
+              <Segmented
+                className=""
+                label="What to record"
+                value={mode}
+                onChange={setMode}
+                options={[
+                  { value: 'voice', label: 'Voice', icon: MicrophoneIcon },
+                  { value: 'screen', label: 'Voice + screen', icon: MonitorIcon },
+                ]}
+              />
+            </m.div>
+          ) : null}
+        </AnimatePresence>
+
+        <div className="mt-6 flex items-center justify-center gap-6">
           <SideControl visible={active}>
             <IconButton
               icon={TrashIcon}
@@ -138,8 +179,10 @@ export default function HomePage() {
             recording={active}
             paused={paused}
             level={level}
-            onToggle={rec.toggle}
-            disabled={rec.state === 'requesting' || rec.state === 'stopping'}
+            onToggle={toggle}
+            disabled={rec.state === 'requesting' || rec.state === 'stopping' || choosing}
+            idleIcon={withScreen ? MonitorIcon : MicrophoneIcon}
+            idleLabel={withScreen ? 'Start screen recording' : 'Start recording'}
           />
           <SideControl visible={active}>
             <IconButton
@@ -153,15 +196,19 @@ export default function HomePage() {
         </div>
 
         <p className="mt-1 min-h-5 text-sm text-fg-muted" aria-live="polite">
-          {rec.state === 'requesting'
-            ? 'Starting microphone…'
-            : active
-              ? rec.targetNoteId
-                ? 'Tap to stop and add it to the note'
-                : paused
-                  ? 'Tap the button to save, or resume'
-                  : 'Tap to stop and save'
-              : 'Tap to record'}
+          {choosing
+            ? 'Pick a screen, window or tab to share…'
+            : rec.state === 'requesting'
+              ? 'Starting microphone…'
+              : active
+                ? rec.targetNoteId
+                  ? 'Tap to stop and add it to the note'
+                  : paused
+                    ? 'Tap the button to save, or resume'
+                    : 'Tap to stop and save'
+                : withScreen
+                  ? 'Tap, pick what to share, then talk it through'
+                  : 'Tap to record'}
         </p>
 
         <AnimatePresence initial={false}>
@@ -171,7 +218,7 @@ export default function HomePage() {
               initial={{ opacity: 0, y: 6 }}
               animate={{ opacity: 1, y: 0 }}
               exit={{ opacity: 0, transition: { duration: 0.12 } }}
-              className="mt-4 flex flex-col items-center gap-1.5"
+              className="mt-4 flex w-full flex-col items-center gap-1.5"
             >
               <MarkButton
                 variant="roomy"
@@ -183,29 +230,10 @@ export default function HomePage() {
                 <Kbd>M</Kbd> marks a moment to find later
               </p>
               {!rec.targetNoteId ? (
-                <div className="mt-2">
+                <div className="mt-3 flex w-full justify-center">
                   <ScreenControls disabled={rec.state === 'stopping'} />
                 </div>
               ) : null}
-            </m.div>
-          ) : rec.screen.supported && rec.state !== 'requesting' ? (
-            <m.div
-              key="with-screen"
-              initial={{ opacity: 0 }}
-              animate={{ opacity: 1 }}
-              exit={{ opacity: 0, transition: { duration: 0.1 } }}
-              className="mt-3"
-            >
-              <Button
-                size="sm"
-                variant="ghost"
-                icon={MonitorIcon}
-                onClick={rec.startWithScreen}
-                disabled={rec.screen.status === 'starting'}
-                className="text-fg-muted"
-              >
-                Record with screen
-              </Button>
             </m.div>
           ) : null}
         </AnimatePresence>

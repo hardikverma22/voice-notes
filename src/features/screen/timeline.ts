@@ -49,3 +49,27 @@ export function frameAt<F extends Timed>(frames: F[], t: number): number {
   }
   return found;
 }
+
+/**
+ * The frame to show while the audio plays at time t. Uses the same lead as pairSpeech, so the
+ * frame changes as the speech about it begins. Before the first frame, the first frame.
+ */
+export function frameDuring<F extends Timed>(frames: F[], t: number): number {
+  if (frames.length === 0) return -1;
+  return Math.max(0, frameAt(frames, t + LEAD_SEC));
+}
+
+/** Where to start playing so a frame's speech is heard from its beginning. */
+export function playFrom<F extends Timed>(frame: F): number {
+  return Math.max(0, frame.t - LEAD_SEC);
+}
+
+/** Index of the segment being spoken at t (the last that started at or before t), or -1. */
+export function segmentAt(segments: Segment[], t: number): number {
+  let found = -1;
+  for (let i = 0; i < segments.length; i++) {
+    if (segments[i]!.start <= t) found = i;
+    else break;
+  }
+  return found;
+}

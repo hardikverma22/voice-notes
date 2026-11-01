@@ -1,5 +1,5 @@
 import { m, useTransform, type MotionValue } from 'motion/react';
-import { MicrophoneIcon } from '../../design/icons';
+import { MicrophoneIcon, type Icon } from '../../design/icons';
 
 interface RecordButtonProps {
   recording: boolean;
@@ -10,6 +10,9 @@ interface RecordButtonProps {
   /** Microphone loudness 0..1; drives the halo while recording. */
   level?: MotionValue<number>;
   paused?: boolean;
+  /** Icon and label while idle; defaults to the microphone. */
+  idleIcon?: Icon;
+  idleLabel?: string;
 }
 
 export function RecordButton({
@@ -19,6 +22,8 @@ export function RecordButton({
   disabledReason,
   level,
   paused = false,
+  idleIcon: IdleIcon = MicrophoneIcon,
+  idleLabel = 'Start recording',
 }: RecordButtonProps) {
   return (
     <div className="flex flex-col items-center gap-3">
@@ -28,7 +33,7 @@ export function RecordButton({
           type="button"
           className={`relative z-10 flex size-24 items-center justify-center rounded-full shadow-lg transition-colors duration-(--vn-dur-base) focus-visible:outline-3 focus-visible:outline-offset-4 focus-visible:outline-focus aria-disabled:cursor-not-allowed aria-disabled:opacity-50 ${recording ? 'bg-record text-record-fg' : 'bg-accent text-accent-fg'}`}
           aria-pressed={recording}
-          aria-label={recording ? 'Stop recording' : 'Start recording'}
+          aria-label={recording ? 'Stop recording' : idleLabel}
           aria-disabled={disabled || undefined}
           whileHover={disabled ? undefined : { scale: 1.04 }}
           whileTap={disabled ? undefined : { scale: 0.92 }}
@@ -38,7 +43,7 @@ export function RecordButton({
         >
           <m.span
             aria-hidden="true"
-            key={recording ? 'stop' : 'mic'}
+            key={recording ? 'stop' : idleLabel}
             initial={{ scale: 0.4, opacity: 0, rotate: recording ? -45 : 0 }}
             animate={{ scale: 1, opacity: 1, rotate: 0 }}
             className="flex items-center justify-center"
@@ -46,7 +51,7 @@ export function RecordButton({
             {recording ? (
               <span className="block size-7 rounded-[0.45rem] bg-current" />
             ) : (
-              <MicrophoneIcon weight="fill" className="size-10" />
+              <IdleIcon weight="fill" className="size-10" />
             )}
           </m.span>
         </m.button>

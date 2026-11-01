@@ -413,7 +413,12 @@ test('README screenshots: screen notes', async ({ page, context }) => {
   await page.screenshot({ path: `${OUT}/screen-note-light.png` });
 
   await page.getByTestId('frames').getByRole('button').nth(2).click();
-  await expect(page.getByRole('dialog', { name: /^Frame 3 of 3/ })).toBeVisible();
+  await page.getByRole('button', { name: /^Mark up/ }).click();
+  const viewer = page.getByRole('dialog', { name: /^Frame 3 of 3/ });
+  await expect(viewer).toBeVisible();
   await settle(page);
   await page.screenshot({ path: `${OUT}/screen-viewer.png` });
+  await viewer.getByRole('button', { name: 'Copy image' }).hover();
+  await page.waitForTimeout(700);
+  await page.screenshot({ path: `${OUT}/screen-viewer-tooltip.png` });
 });
