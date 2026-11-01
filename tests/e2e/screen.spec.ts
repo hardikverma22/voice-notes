@@ -3,13 +3,23 @@ import { expect, test, type Page } from '@playwright/test';
 import { readFile } from 'node:fs/promises';
 import { strFromU8, unzipSync } from 'fflate';
 
+/**
+ * axe on the page as it settles: entrance fades briefly blend text toward the background, so
+ * this polls until clean. A real violation persists and fails with its details.
+ */
 async function expectNoAxeViolations(page: Page) {
-  const results = await new AxeBuilder({ page }).withTags(['wcag2a', 'wcag2aa']).analyze();
-  expect(
-    results.violations.map(
-      (v) => `${v.id}: ${v.nodes.map((n) => `${n.target} ${n.any[0]?.message ?? ''}`).join(', ')}`,
-    ),
-  ).toEqual([]);
+  await expect
+    .poll(
+      async () => {
+        const results = await new AxeBuilder({ page }).withTags(['wcag2a', 'wcag2aa']).analyze();
+        return results.violations.map(
+          (v) =>
+            `${v.id}: ${v.nodes.map((n) => `${n.target} ${n.any[0]?.message ?? ''}`).join(', ')}`,
+        );
+      },
+      { timeout: 6000, intervals: [400, 800, 1500] },
+    )
+    .toEqual([]);
 }
 
 test.describe('screen recording', () => {
