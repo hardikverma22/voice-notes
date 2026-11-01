@@ -45,6 +45,7 @@ import NoteEditor, { type SaveStatus } from './NoteEditor';
 import { RecordMorePanel } from './RecordMorePanel';
 import { StatusBadge } from './StatusBadge';
 import { RelatedNotes } from '../search/RelatedNotes';
+import { FramesStrip } from '../screen/FramesStrip';
 import { TagEditor } from './TagEditor';
 import { TranscriptView } from './TranscriptView';
 import { useAudioPlayer } from './useAudioPlayer';
@@ -330,6 +331,8 @@ function NoteView({ note, t }: { note: Note; t: number | null }) {
                 </m.div>
               ) : null}
             </AnimatePresence>
+
+            {!recordingHere ? <FramesStrip note={note} player={clipUrl ? player : null} /> : null}
 
             {hasTimestamps ? (
               <div role="tablist" aria-label="View" className="flex gap-1 border-b border-border">

@@ -11,8 +11,10 @@ import {
   replaceNoteAudio,
 } from '../../storage/audio';
 import type { Bookmark } from '../../storage/db';
+import { adoptSessionFrames, discardSessionFrames } from '../../storage/frames';
 import { createNote, getNote, setNoteAudio, startAppend } from '../../storage/notes';
 import { titleFromTranscript } from '../notes/title';
+import { useScreenSession } from '../screen/useScreenSession';
 import { transcriptToDoc } from '../notes/transcriptToDoc';
 import { MODEL_ID, SAMPLE_RATE } from '../transcribe/config';
 import { getTranscriptionSettings } from '../transcribe/settings';
@@ -49,6 +51,29 @@ export function RecordingProvider({ children }: { children: ReactNode }) {
   const marksRef = useRef<number[]>([]);
   const [markCount, setMarkCount] = useState(0);
   const elapsedRef = useRef(0);
+  /** Session id chosen before the recording starts, so a screen share can save frames early. */
+  const pendingSessionRef = useRef<string | null>(null);
+  const pausedRef = useRef(false);
+  const runningRef = useRef(false);
+
+  const screen = useScreenSession({
+    getSessionId: () => sessionRef.current ?? pendingSessionRef.current,
+    // Before the microphone is running, elapsed still holds the last recording's length.
+    getTime: () => (runningRef.current ? elapsedRef.current / 1000 : 0),
+    isPaused: () => pausedRef.current,
+    onError: (code) =>
+      toast.show({
+        tone: 'error',
+        message:
+          code === 'unsupported'
+            ? 'This browser cannot share the screen. Try Chrome, Edge or Firefox on a computer.'
+            : 'Could not share the screen.',
+      }),
+  });
+  const screenRef = useRef(screen);
+  useEffect(() => {
+    screenRef.current = screen;
+  });
 
   useEffect(() => {
     liveRef.current = live;
@@ -78,7 +103,10 @@ export function RecordingProvider({ children }: { children: ReactNode }) {
           offsetSec,
           bookmarks: toBookmarks(marks, offsetSec),
         });
-        if (sessionId) await discardSession(sessionId);
+        if (sessionId) {
+          await adoptSessionFrames(sessionId, noteId, offsetSec);
+          await discardSession(sessionId);
+        }
         enqueueTranscription(noteId, result.pcm);
         toast.show({ tone: 'success', message: 'Added to this note', durationMs: 3000 });
         return true;
@@ -98,6 +126,7 @@ export function RecordingProvider({ children }: { children: ReactNode }) {
     async (result: RecordingResult) => {
       const sessionId = sessionRef.current;
       sessionRef.current = null;
+      screenRef.current.stop();
       const target = targetRef.current;
       targetRef.current = null;
       setTargetNoteId(null);
@@ -129,6 +158,7 @@ export function RecordingProvider({ children }: { children: ReactNode }) {
         if (sessionId) {
           const audio = await finalizeSession(sessionId, note.id);
           await setNoteAudio(note.id, audio.id);
+          await adoptSessionFrames(sessionId, note.id);
         }
         enqueueTranscription(note.id, result.pcm);
         setLastSavedId(note.id);
@@ -156,7 +186,8 @@ export function RecordingProvider({ children }: { children: ReactNode }) {
 
   const recorder = useRecorder({
     onStarted: (getPcm) => {
-      sessionRef.current = crypto.randomUUID();
+      sessionRef.current = pendingSessionRef.current ?? crypto.randomUUID();
+      pendingSessionRef.current = null;
       targetRef.current = pendingTargetRef.current;
       pendingTargetRef.current = null;
       setTargetNoteId(targetRef.current);
@@ -184,7 +215,11 @@ export function RecordingProvider({ children }: { children: ReactNode }) {
       marksRef.current = [];
       setMarkCount(0);
       liveRef.current.stop();
-      if (sessionId) void discardSession(sessionId);
+      screenRef.current.stop();
+      if (sessionId) {
+        void discardSession(sessionId);
+        void discardSessionFrames(sessionId);
+      }
       toast.show({ message: 'Recording discarded' });
     },
   });
@@ -198,7 +233,33 @@ export function RecordingProvider({ children }: { children: ReactNode }) {
   const { state, elapsedMs, analyser, error, start, stop, pause, resume, cancel } = recorder;
   useEffect(() => {
     elapsedRef.current = elapsedMs;
+    pausedRef.current = state === 'paused';
+    runningRef.current = state === 'recording' || state === 'paused';
   });
+
+  // The microphone failed to start after a screen was picked: drop the share and its frames.
+  useEffect(() => {
+    if (state !== 'error') return;
+    const pending = pendingSessionRef.current;
+    pendingSessionRef.current = null;
+    screenRef.current.stop();
+    if (pending) void discardSessionFrames(pending);
+  }, [state]);
+
+  useSnapShortcut(screen.status === 'on', screen.snap);
+
+  const startWithScreen = useCallback(async () => {
+    if (state !== 'idle' && state !== 'error') return;
+    pendingSessionRef.current = crypto.randomUUID();
+    screenRef.current.reset();
+    const shared = await screenRef.current.start();
+    if (!shared) {
+      pendingSessionRef.current = null;
+      return;
+    }
+    pendingTargetRef.current = null;
+    void start();
+  }, [state, start]);
 
   const value = useMemo<RecordingContextValue>(
     () => ({
@@ -210,15 +271,30 @@ export function RecordingProvider({ children }: { children: ReactNode }) {
       lastSavedId,
       targetNoteId,
       markCount,
+      screen: {
+        status: screen.status,
+        frameCount: screen.frameCount,
+        lastFrameAt: screen.lastFrameAt,
+        supported: screen.supported,
+      },
       start: () => {
         pendingTargetRef.current = null;
+        screen.reset();
         void start();
       },
       startFor: (noteId) => {
         if (state !== 'idle' && state !== 'error') return;
         pendingTargetRef.current = noteId;
+        screen.reset();
         void start();
       },
+      startWithScreen: () => void startWithScreen(),
+      shareScreen: () => {
+        if (state !== 'recording' && state !== 'paused') return;
+        void screen.start();
+      },
+      stopScreen: screen.stop,
+      snap: screen.snap,
       mark: () => {
         if (state !== 'recording' && state !== 'paused') return;
         marksRef.current.push(elapsedRef.current / 1000);
@@ -232,6 +308,7 @@ export function RecordingProvider({ children }: { children: ReactNode }) {
         if (state === 'recording' || state === 'paused') void stop();
         else if (state === 'idle' || state === 'error') {
           pendingTargetRef.current = null;
+          screen.reset();
           void start();
         }
       },
@@ -246,6 +323,8 @@ export function RecordingProvider({ children }: { children: ReactNode }) {
       lastSavedId,
       targetNoteId,
       markCount,
+      screen,
+      startWithScreen,
       start,
       stop,
       pause,
@@ -269,6 +348,27 @@ function useMarkShortcut(enabled: boolean, onMark: () => void) {
     if (!enabled) return;
     const handler = (event: KeyboardEvent) => {
       if (event.code !== 'KeyM' || event.repeat || event.metaKey || event.ctrlKey || event.altKey)
+        return;
+      const target = event.target as Element | null;
+      if (target?.closest?.(TYPING_SELECTOR)) return;
+      event.preventDefault();
+      callbackRef.current();
+    };
+    document.addEventListener('keydown', handler);
+    return () => document.removeEventListener('keydown', handler);
+  }, [enabled]);
+}
+
+/** S takes a frame of the shared screen, unless the person is typing. */
+function useSnapShortcut(enabled: boolean, onSnap: () => void) {
+  const callbackRef = useRef(onSnap);
+  useEffect(() => {
+    callbackRef.current = onSnap;
+  });
+  useEffect(() => {
+    if (!enabled) return;
+    const handler = (event: KeyboardEvent) => {
+      if (event.code !== 'KeyS' || event.repeat || event.metaKey || event.ctrlKey || event.altKey)
         return;
       const target = event.target as Element | null;
       if (target?.closest?.(TYPING_SELECTOR)) return;
@@ -315,6 +415,7 @@ function useRecoverOrphans() {
         });
         const audio = await finalizeSession(sessionId, note.id);
         await setNoteAudio(note.id, audio.id);
+        await adoptSessionFrames(sessionId, note.id);
         enqueueTranscription(note.id);
         recoveredId = note.id;
       }

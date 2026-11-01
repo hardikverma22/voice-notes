@@ -7,6 +7,7 @@ import {
   ArrowRightIcon,
   CheckIcon,
   LockSimpleIcon,
+  MonitorIcon,
   PauseIcon,
   PlayIcon,
   TrashIcon,
@@ -18,6 +19,7 @@ import { NotesLibrary } from '../notes/NotesLibrary';
 import { MarkButton } from '../notes/RecordMorePanel';
 import { StatusBadge } from '../notes/StatusBadge';
 import { RecordButton } from '../recorder/RecordButton';
+import { ScreenControls } from '../screen/ScreenControls';
 import { useRecording } from '../recorder/recordingContext';
 import type { RecorderErrorCode } from '../recorder/recorder';
 import { useAudioLevel } from '../recorder/useAudioLevel';
@@ -180,6 +182,30 @@ export default function HomePage() {
               <p className="hidden items-center gap-1.5 text-xs text-fg-muted sm:flex">
                 <Kbd>M</Kbd> marks a moment to find later
               </p>
+              {!rec.targetNoteId ? (
+                <div className="mt-2">
+                  <ScreenControls disabled={rec.state === 'stopping'} />
+                </div>
+              ) : null}
+            </m.div>
+          ) : rec.screen.supported && rec.state !== 'requesting' ? (
+            <m.div
+              key="with-screen"
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0, transition: { duration: 0.1 } }}
+              className="mt-3"
+            >
+              <Button
+                size="sm"
+                variant="ghost"
+                icon={MonitorIcon}
+                onClick={rec.startWithScreen}
+                disabled={rec.screen.status === 'starting'}
+                className="text-fg-muted"
+              >
+                Record with screen
+              </Button>
             </m.div>
           ) : null}
         </AnimatePresence>

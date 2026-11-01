@@ -1,5 +1,5 @@
 import { AnimatePresence, m } from 'motion/react';
-import { PauseIcon, PlayIcon } from '../design/icons';
+import { CameraIcon, PauseIcon, PlayIcon } from '../design/icons';
 import { useRecording } from '../features/recorder/recordingContext';
 import { formatDuration } from '../lib/format';
 import { navigate, useHashRoute } from './router';
@@ -36,6 +36,17 @@ export function RecordingPill({ visible }: { visible: boolean }) {
             />
             <span className="tabular">{formatDuration(rec.elapsedMs)}</span>
           </button>
+          {rec.screen.status === 'on' ? (
+            <button
+              type="button"
+              onClick={rec.snap}
+              aria-label={`Take a frame of the shared screen (${rec.screen.frameCount} so far)`}
+              aria-keyshortcuts="S"
+              className="flex size-10 items-center justify-center rounded-full text-accent hover:bg-surface-2 focus-visible:outline-2 focus-visible:outline-focus"
+            >
+              <CameraIcon aria-hidden="true" weight="bold" className="size-4" />
+            </button>
+          ) : null}
           <button
             type="button"
             onClick={paused ? rec.resume : rec.pause}
