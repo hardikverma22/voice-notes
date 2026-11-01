@@ -24,6 +24,7 @@ import {
 } from '../../design/icons';
 import { formatDuration } from '../../lib/format';
 import { getAudio } from '../../storage/audio';
+import { listNoteFrames } from '../../storage/frames';
 import type { AudioRecord, Note } from '../../storage/db';
 import {
   addBookmark,
@@ -80,6 +81,7 @@ function NoteView({ note, t }: { note: Note; t: number | null }) {
   const [newBookmarkId, setNewBookmarkId] = useState<string | null>(null);
   const [exporting, setExporting] = useState(false);
   const rec = useRecording();
+  const frames = useLiveQuery(() => listNoteFrames(note.id), [note.id]);
   const allTags = useLiveQuery(
     async () => collectTags(await listNotes()).map((entry) => entry.tag),
     [],
@@ -345,6 +347,7 @@ function NoteView({ note, t }: { note: Note; t: number | null }) {
                     cacheKey={audio.id}
                     onDownload={downloadAudio}
                     bookmarks={note.bookmarks}
+                    frameTimes={frames?.map((frame) => frame.t)}
                     onBookmark={() => void bookmarkNow()}
                   />
                   <BookmarkList
@@ -360,6 +363,7 @@ function NoteView({ note, t }: { note: Note; t: number | null }) {
             {!recordingHere ? (
               <FramesStrip
                 note={note}
+                frames={frames}
                 player={clipUrl ? player : null}
                 onExport={() => void exportBundle()}
                 exporting={exporting}

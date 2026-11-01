@@ -38,6 +38,9 @@ test.describe('screen recording', () => {
     const strip = page.getByTestId('frames');
     await expect(strip.getByRole('button')).not.toHaveCount(0);
     await expect(page.getByRole('heading', { name: /Screen/ })).toBeVisible();
+    // Each frame also shows as a tick on the audio timeline.
+    const frameCount = await strip.getByRole('button').count();
+    await expect(page.getByTestId('frame-ticks').locator('button')).toHaveCount(frameCount);
     await strip.getByRole('button').first().click();
 
     const viewer = page.getByRole('dialog', { name: /^Frame 1 of/ });

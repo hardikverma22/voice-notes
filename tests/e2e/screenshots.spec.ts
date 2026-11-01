@@ -253,3 +253,167 @@ test('README screenshots', async ({ page }) => {
   await settle(page);
   await page.screenshot({ path: `${OUT}/phone-note-dark.png` });
 });
+
+/** A small shop page in three states, for screen-recording screenshots. */
+function shopPage(state: 'cart' | 'paying' | 'error') {
+  const banner =
+    state === 'error'
+      ? '<div class="err">Payment failed: card_declined (code 402). Your cart was emptied.</div>'
+      : '';
+  const button = state === 'paying' ? 'Processing…' : 'Pay $86.00';
+  return `<!doctype html><html><head><style>
+    body{margin:0;font:15px/1.5 system-ui,sans-serif;background:#f4f5f7;color:#16181d}
+    header{background:#16181d;color:#fff;padding:14px 32px;font-weight:600}
+    main{max-width:760px;margin:32px auto;background:#fff;border-radius:12px;padding:28px;box-shadow:0 1px 3px #0002}
+    h1{margin:0 0 16px;font-size:22px} .row{display:flex;justify-content:space-between;padding:10px 0;border-bottom:1px solid #eee}
+    .total{font-weight:700;font-size:17px} button{margin-top:22px;width:100%;padding:14px;border:0;border-radius:10px;background:${state === 'paying' ? '#9aa3b2' : '#3b5bdb'};color:#fff;font-size:16px;font-weight:600}
+    .err{margin:-8px 0 18px;padding:12px 14px;border-radius:8px;background:#fdecea;color:#a1271b;font-weight:500}
+  </style></head><body><header>Acme Store</header><main>${banner}<h1>Your cart</h1>
+    <div class="row"><span>Trail runners, size 42</span><span>$72.00</span></div>
+    <div class="row"><span>Merino socks ×2</span><span>$14.00</span></div>
+    <div class="row total"><span>Total</span><span>$86.00</span></div>
+    <button>${button}</button></main></body></html>`;
+}
+
+test('README screenshots: screen notes', async ({ page, context }) => {
+  test.setTimeout(120_000);
+  // Capture the shop page in each state as a frame image.
+  const shop = await context.newPage();
+  await shop.setViewportSize({ width: 1280, height: 720 });
+  const shots: string[] = [];
+  for (const state of ['cart', 'paying', 'error'] as const) {
+    await shop.setContent(shopPage(state));
+    shots.push((await shop.screenshot({ type: 'jpeg', quality: 90 })).toString('base64'));
+  }
+  await shop.close();
+
+  await page.setViewportSize(DESKTOP);
+  await page.emulateMedia({ colorScheme: 'light' });
+  await page.goto('/');
+  await dismissBanners(page);
+  const noteId = 'screen-demo';
+  await page.evaluate(
+    async ({ noteId, shots }) => {
+      const now = Date.now();
+      const segments = [
+        { start: 0.5, end: 4, text: 'Okay, so this is the cart with two items in it.' },
+        { start: 4.5, end: 9, text: 'Everything looks right, the total is eighty-six dollars.' },
+        { start: 13, end: 17, text: 'I click pay, and it just sits on processing for a while.' },
+        {
+          start: 25,
+          end: 30,
+          text: 'Then this error shows up, card declined, but the card is fine.',
+        },
+        {
+          start: 30.5,
+          end: 36,
+          text: 'And worse, it emptied the cart. We should keep the cart on a failed payment.',
+        },
+      ];
+      const text = [
+        'Paying with a valid card fails with card_declined, and the cart is emptied.',
+        'Expected: payment succeeds, or the cart is kept so the person can retry.',
+      ];
+      const open = indexedDB.open('voice-notes');
+      const db = await new Promise<IDBDatabase>((resolve, reject) => {
+        open.onsuccess = () => resolve(open.result);
+        open.onerror = () => reject(open.error);
+      });
+      const tx = db.transaction(['notes', 'frames'], 'readwrite');
+      tx.objectStore('notes').put({
+        id: noteId,
+        title: 'Checkout: valid card declined, cart emptied',
+        contentJson: JSON.stringify({
+          type: 'doc',
+          content: text.map((t) => ({ type: 'paragraph', content: [{ type: 'text', text: t }] })),
+        }),
+        plainText: text.join('\n'),
+        segments,
+        audioId: null,
+        durationMs: 38_000,
+        language: 'english',
+        modelId: 'demo',
+        device: 'webgpu',
+        createdAt: now - 5 * 60_000,
+        updatedAt: now,
+        pinned: false,
+        status: 'ready',
+        autoTitle: false,
+        tags: ['bug'],
+        bookmarks: [],
+        pendingAppend: null,
+      });
+      const strokes = [
+        [],
+        [
+          {
+            id: 'b1',
+            tool: 'box',
+            color: '#ef4444',
+            points: [
+              [0.205, 0.53],
+              [0.795, 0.66],
+            ],
+          },
+        ],
+        [
+          {
+            id: 'a1',
+            tool: 'arrow',
+            color: '#ef4444',
+            points: [
+              [0.68, 0.34],
+              [0.58, 0.225],
+            ],
+          },
+          {
+            id: 'h1',
+            tool: 'highlighter',
+            color: '#f59e0b',
+            points: [
+              [0.24, 0.452],
+              [0.5, 0.452],
+              [0.765, 0.452],
+            ],
+          },
+        ],
+      ];
+      const times = [1, 12, 24];
+      for (const [i, b64] of shots.entries()) {
+        const bytes = Uint8Array.from(atob(b64), (c) => c.charCodeAt(0));
+        tx.objectStore('frames').put({
+          id: `f${i}`,
+          noteId,
+          sessionId: null,
+          t: times[i],
+          blob: new Blob([bytes], { type: 'image/jpeg' }),
+          mimeType: 'image/jpeg',
+          width: 1280,
+          height: 720,
+          source: 'auto',
+          strokes: strokes[i],
+          createdAt: now,
+        });
+      }
+      await new Promise<void>((resolve, reject) => {
+        tx.oncomplete = () => resolve();
+        tx.onerror = () => reject(tx.error);
+      });
+    },
+    { noteId, shots },
+  );
+
+  // Dexie's live queries do not see writes made outside it; reload to pick up the seed.
+  await page.goto(`/#/note/${noteId}`);
+  await page.reload();
+  await expect(page.getByTestId('frames').getByRole('button')).toHaveCount(3);
+  await settle(page);
+  await dismissBanners(page);
+  await settle(page);
+  await page.screenshot({ path: `${OUT}/screen-note-light.png` });
+
+  await page.getByTestId('frames').getByRole('button').nth(2).click();
+  await expect(page.getByRole('dialog', { name: /^Frame 3 of 3/ })).toBeVisible();
+  await settle(page);
+  await page.screenshot({ path: `${OUT}/screen-viewer.png` });
+});

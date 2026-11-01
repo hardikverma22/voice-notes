@@ -28,6 +28,7 @@ export function AudioPlayer({
   cacheKey,
   onDownload,
   bookmarks = [],
+  frameTimes = [],
   onBookmark,
 }: {
   player: Player;
@@ -35,6 +36,8 @@ export function AudioPlayer({
   cacheKey: string;
   onDownload: () => void;
   bookmarks?: Bookmark[];
+  /** Where screen frames were taken, in seconds; drawn as ticks under the waveform. */
+  frameTimes?: number[];
   /** Marks the current play position. */
   onBookmark?: () => void;
 }) {
@@ -86,6 +89,30 @@ export function AudioPlayer({
         </m.button>
 
         <div className="relative min-w-0 flex-1">
+          {player.duration > 0 && frameTimes.length > 0 ? (
+            <div
+              aria-hidden="true"
+              data-testid="frame-ticks"
+              className="pointer-events-none absolute inset-x-0 -bottom-2 h-2"
+            >
+              {frameTimes.map((t, index) => (
+                <button
+                  key={`${index}:${t}`}
+                  type="button"
+                  tabIndex={-1}
+                  title={`Screen frame ${index + 1} · ${formatDuration(t * 1000)}`}
+                  onClick={() => {
+                    player.seek(t);
+                    player.play();
+                  }}
+                  className="pointer-events-auto absolute top-0 flex h-full w-3 -translate-x-1/2 cursor-pointer justify-center"
+                  style={{ left: `${Math.min(1, t / player.duration) * 100}%` }}
+                >
+                  <span className="h-full w-0.5 rounded-full bg-fg-muted/70" />
+                </button>
+              ))}
+            </div>
+          ) : null}
           {player.duration > 0 && bookmarks.length > 0 ? (
             <div aria-hidden="true" className="pointer-events-none absolute inset-x-0 -top-2.5 h-3">
               <AnimatePresence initial={false}>

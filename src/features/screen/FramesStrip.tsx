@@ -1,10 +1,8 @@
-import { useLiveQuery } from 'dexie-react-hooks';
 import { useState } from 'react';
 import { Button } from '../../design/components/Button';
 import { FileZipIcon, ImagesIcon, PencilSimpleIcon } from '../../design/icons';
 import { formatDuration } from '../../lib/format';
-import type { Note } from '../../storage/db';
-import { listNoteFrames } from '../../storage/frames';
+import type { Frame, Note } from '../../storage/db';
 import type { AudioPlayer } from '../notes/useAudioPlayer';
 import { FrameImage } from './FrameImage';
 import { FrameViewer } from './FrameViewer';
@@ -14,17 +12,19 @@ import { useFrameUrls } from './useFrameUrls';
 /** The screen frames of a note, as a filmstrip that opens the viewer. */
 export function FramesStrip({
   note,
+  frames,
   player,
   onExport,
   exporting,
 }: {
   note: Note;
+  /** The note's frames in time order; undefined while loading. */
+  frames: Frame[] | undefined;
   player: AudioPlayer | null;
   /** Zips the note with its frames for an AI agent. */
   onExport(): void;
   exporting: boolean;
 }) {
-  const frames = useLiveQuery(() => listNoteFrames(note.id), [note.id]);
   const urls = useFrameUrls(frames);
   const [open, setOpen] = useState<number | null>(null);
   if (!frames || frames.length === 0) return null;
