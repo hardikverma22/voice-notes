@@ -14,6 +14,7 @@ import {
   DotsThreeIcon,
   DownloadSimpleIcon,
   FileTextIcon,
+  FileZipIcon,
   MicrophoneIcon,
   PushPinIcon,
   ShareNetworkIcon,
@@ -77,6 +78,7 @@ function NoteView({ note, t }: { note: Note; t: number | null }) {
   const [audio, setAudio] = useState<AudioRecord | null>(null);
   const [clipUrl, setClipUrl] = useState<string | null>(null);
   const [newBookmarkId, setNewBookmarkId] = useState<string | null>(null);
+  const [exporting, setExporting] = useState(false);
   const rec = useRecording();
   const allTags = useLiveQuery(
     async () => collectTags(await listNotes()).map((entry) => entry.tag),
@@ -170,6 +172,28 @@ function NoteView({ note, t }: { note: Note; t: number | null }) {
     );
   }
 
+  async function exportBundle() {
+    if (exporting) return;
+    setExporting(true);
+    try {
+      const { buildBundle } = await import('../screen/exportBundle');
+      const bundle = await buildBundle(note, editor?.getMarkdown() ?? note.plainText);
+      downloadBlob(bundle.name, bundle.blob);
+      toast.show({
+        tone: 'success',
+        message: bundle.frames
+          ? `Exported with ${bundle.frames} ${bundle.frames === 1 ? 'frame' : 'frames'}. Unzip it and hand report.md to your agent.`
+          : 'Exported. Open report.html, or hand report.md to your agent.',
+        durationMs: 6000,
+      });
+    } catch (error) {
+      console.error('Could not export the note', error);
+      toast.show({ tone: 'error', message: 'Could not export this note.' });
+    } finally {
+      setExporting(false);
+    }
+  }
+
   function downloadAudio() {
     if (!audio) return;
     downloadBlob(fileNameFor(note.title, note.createdAt, extensionFor(audio.mimeType)), audio.blob);
@@ -195,6 +219,7 @@ function NoteView({ note, t }: { note: Note; t: number | null }) {
     { label: 'Share', icon: ShareNetworkIcon, onSelect: () => void share() },
     { label: 'Export as Markdown', icon: FileTextIcon, onSelect: () => exportAs('md') },
     { label: 'Export as plain text', icon: FileTextIcon, onSelect: () => exportAs('txt') },
+    { label: 'Export report (.zip)', icon: FileZipIcon, onSelect: () => void exportBundle() },
     ...(audio
       ? [{ label: 'Download audio', icon: DownloadSimpleIcon, onSelect: downloadAudio }]
       : []),
@@ -332,7 +357,14 @@ function NoteView({ note, t }: { note: Note; t: number | null }) {
               ) : null}
             </AnimatePresence>
 
-            {!recordingHere ? <FramesStrip note={note} player={clipUrl ? player : null} /> : null}
+            {!recordingHere ? (
+              <FramesStrip
+                note={note}
+                player={clipUrl ? player : null}
+                onExport={() => void exportBundle()}
+                exporting={exporting}
+              />
+            ) : null}
 
             {hasTimestamps ? (
               <div role="tablist" aria-label="View" className="flex gap-1 border-b border-border">

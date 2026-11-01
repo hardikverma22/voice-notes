@@ -1,4 +1,6 @@
 import { expect, test } from '@playwright/test';
+import { readFile } from 'node:fs/promises';
+import { strFromU8, unzipSync } from 'fflate';
 
 test.describe('screen recording', () => {
   test('records with a shared screen, then marks up a frame on the note', async ({ page }) => {
@@ -58,6 +60,26 @@ test.describe('screen recording', () => {
     await expect(markedUp).toHaveCount(1);
     await page.reload();
     await expect(markedUp).toHaveCount(1);
+
+    // Export for agent: a zip with the reports, the frames with marks flattened in, and audio.
+    const downloading = page.waitForEvent('download');
+    await page.getByRole('button', { name: 'Export for agent' }).click();
+    const download = await downloading;
+    expect(download.suggestedFilename()).toMatch(/\.zip$/);
+    const files = unzipSync(new Uint8Array(await readFile((await download.path())!)));
+    const names = Object.keys(files);
+    expect(names).toEqual(expect.arrayContaining(['report.md', 'report.html']));
+    expect(names.some((name) => /^audio\./.test(name))).toBe(true);
+    const frameFiles = names.filter((name) => name.startsWith('frames/'));
+    expect(frameFiles.length).toBeGreaterThanOrEqual(2);
+    const md = strFromU8(files['report.md']!);
+    expect(md).toContain('## Walkthrough');
+    expect(md).toContain('(marked up)');
+    for (const file of frameFiles) expect(md).toContain(`](${file})`);
+    const html = strFromU8(files['report.html']!);
+    expect(html).toContain('<audio id="audio"');
+    expect(html.match(/src="data:image\//g)?.length).toBe(frameFiles.length);
+
     expect(consoleErrors).toEqual([]);
   });
 });

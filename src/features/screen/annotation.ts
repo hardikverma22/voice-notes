@@ -94,8 +94,11 @@ export function isNegligible(stroke: Stroke): boolean {
   return Math.hypot(last[0] - first[0], last[1] - first[1]) < 0.01;
 }
 
-/** The frame with its drawing flattened into one PNG. Frames without a drawing are returned as is. */
-export async function flattenFrame(frame: Frame): Promise<Blob> {
+/**
+ * The frame with its drawing flattened into one image, PNG by default. Frames without a
+ * drawing are returned as is.
+ */
+export async function flattenFrame(frame: Frame, type = 'image/png'): Promise<Blob> {
   if (frame.strokes.length === 0) return frame.blob;
   const bitmap = await createImageBitmap(frame.blob);
   const canvas = document.createElement('canvas');
@@ -114,6 +117,6 @@ export async function flattenFrame(frame: Frame): Promise<Blob> {
     ctx.stroke(new Path2D(strokePath(stroke, frame.width, frame.height)));
   }
   ctx.globalAlpha = 1;
-  const blob = await new Promise<Blob | null>((resolve) => canvas.toBlob(resolve, 'image/png'));
+  const blob = await new Promise<Blob | null>((resolve) => canvas.toBlob(resolve, type, 0.9));
   return blob ?? frame.blob;
 }
