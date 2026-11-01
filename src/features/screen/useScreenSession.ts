@@ -29,6 +29,8 @@ export function useScreenSession(options: Options) {
     optionsRef.current = options;
   });
   const captureRef = useRef<ScreenCapture | null>(null);
+  /** Frame writes still in flight, so a save can wait for them before moving frames. */
+  const pendingRef = useRef(new Set<Promise<unknown>>());
   const [status, setStatus] = useState<ScreenStatus>('off');
   const [frameCount, setFrameCount] = useState(0);
   const [lastFrameAt, setLastFrameAt] = useState<number | null>(null);
@@ -54,12 +56,14 @@ export function useScreenSession(options: Options) {
           const sessionId = optionsRef.current.getSessionId();
           if (!sessionId) return;
           const t = optionsRef.current.getTime();
-          addSessionFrame(sessionId, { ...image, t, source })
+          const write = addSessionFrame(sessionId, { ...image, t, source })
             .then(() => {
               setFrameCount((count) => count + 1);
               setLastFrameAt(Date.now());
             })
-            .catch((error: unknown) => console.error('Could not save a screen frame', error));
+            .catch((error: unknown) => console.error('Could not save a screen frame', error))
+            .finally(() => pendingRef.current.delete(write));
+          pendingRef.current.add(write);
         },
       });
       setStatus('on');
@@ -72,7 +76,18 @@ export function useScreenSession(options: Options) {
     }
   }, []);
 
-  const snap = useCallback(() => void captureRef.current?.snap(), []);
+  const snap = useCallback(() => {
+    const capture = captureRef.current;
+    if (!capture) return;
+    // The encode runs before the frame is written; count it as in flight too.
+    const shot = capture.snap().finally(() => pendingRef.current.delete(shot));
+    pendingRef.current.add(shot);
+  }, []);
+
+  /** Resolves once every frame taken so far is in IndexedDB. */
+  const settle = useCallback(async () => {
+    while (pendingRef.current.size > 0) await Promise.allSettled([...pendingRef.current]);
+  }, []);
   const reset = useCallback(() => {
     setFrameCount(0);
     setLastFrameAt(null);
@@ -88,6 +103,7 @@ export function useScreenSession(options: Options) {
     start,
     stop,
     snap,
+    settle,
     reset,
   };
 }
