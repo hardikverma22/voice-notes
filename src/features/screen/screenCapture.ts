@@ -104,7 +104,7 @@ export async function startScreenCapture(options: ScreenCaptureOptions): Promise
     const ctx = full.getContext('2d');
     if (!ctx) return null;
     ctx.drawImage(video, 0, 0, size.width, size.height);
-    const blob = await toBlob(full);
+    const blob = await encodeCanvas(full);
     if (!blob) return null;
     return { blob, mimeType: blob.type, ...size };
   };
@@ -153,8 +153,13 @@ export async function startScreenCapture(options: ScreenCaptureOptions): Promise
   };
 }
 
-/** WebP where supported (small, sharp text), otherwise JPEG. */
-async function toBlob(canvas: HTMLCanvasElement): Promise<Blob | null> {
+/**
+ * WebP where supported (small, sharp text), otherwise JPEG. Browsers that can't encode WebP
+ * (Safari) hand back a PNG instead of failing, so the type is checked.
+ */
+export async function encodeCanvas(
+  canvas: Pick<HTMLCanvasElement, 'toBlob'>,
+): Promise<Blob | null> {
   const attempt = (type: string, quality: number) =>
     new Promise<Blob | null>((resolve) => canvas.toBlob(resolve, type, quality));
   const webp = await attempt('image/webp', 0.86);

@@ -3,6 +3,13 @@ import { fileURLToPath } from 'node:url';
 
 const speechWav = fileURLToPath(new URL('./tests/fixtures/speech.wav', import.meta.url));
 
+// Specs that also run in Firefox (npx playwright test --project=firefox), which can fake both
+// a microphone and a shared screen. The rest rely on Chromium's fake audio file.
+const FIREFOX = /(smoke|screen|screen-ocr|cross-browser)\.spec\.ts$/;
+// Playwright's WebKit can't fake a shared screen and, its contexts being ephemeral, can't keep
+// Blobs in IndexedDB, so it runs the specs that need neither.
+const WEBKIT = /(smoke|cross-browser)\.spec\.ts$/;
+
 export default defineConfig({
   testDir: 'tests/e2e',
   timeout: 180_000,
@@ -29,6 +36,24 @@ export default defineConfig({
           ],
         },
       },
+    },
+    {
+      name: 'firefox',
+      testMatch: FIREFOX,
+      use: {
+        ...devices['Desktop Firefox'],
+        launchOptions: {
+          firefoxUserPrefs: {
+            'media.navigator.streams.fake': true,
+            'media.navigator.permission.disabled': true,
+          },
+        },
+      },
+    },
+    {
+      name: 'webkit',
+      testMatch: WEBKIT,
+      use: { ...devices['Desktop Safari'] },
     },
   ],
 });

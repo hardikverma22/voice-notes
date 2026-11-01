@@ -1,4 +1,5 @@
 import { AnimatePresence, m } from 'motion/react';
+import { useEffect } from 'react';
 import { useRegisterSW } from 'virtual:pwa-register/react';
 import { Button } from '../design/components/Button';
 
@@ -8,6 +9,19 @@ export function UpdatePrompt() {
     offlineReady: [offlineReady, setOfflineReady],
     updateServiceWorker,
   } = useRegisterSW();
+
+  // Firefox can report an update when the page is reloaded while the first service worker is
+  // still installing, with nothing actually waiting. Only a waiting worker is a new version.
+  useEffect(() => {
+    if (!needRefresh) return;
+    let cancelled = false;
+    void navigator.serviceWorker?.getRegistration().then((registration) => {
+      if (!cancelled && !registration?.waiting) setNeedRefresh(false);
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [needRefresh, setNeedRefresh]);
 
   const visible = needRefresh || offlineReady;
   return (

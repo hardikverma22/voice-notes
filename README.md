@@ -429,6 +429,11 @@ mark up and export on a phone.
   notes. Speech fixtures need macOS `say`; those tests skip elsewhere. Screen recording runs
   against Chromium's fake display capture: auto and manual frames, drawing, undo, persistence,
   timeline ticks, and the exported zip's contents.
+- **Cross-browser:** `npm run test:e2e:cross` runs the screen-recording, OCR, home and smoke
+  specs in Firefox (which can fake a mic and a shared screen), and the home and smoke specs in
+  WebKit. Playwright's WebKit can't fake a shared screen or keep Blobs in IndexedDB, so screen
+  capture in Safari is covered by its JPEG fallback test rather than end to end. Run
+  `npx playwright install firefox webkit` once first.
 - **Accessibility:** axe (WCAG 2.0/2.1 AA) on home and note pages in light and dark, plus a
   phone-width layout check. Contrast for every token pair runs in `npm run verify`.
 
