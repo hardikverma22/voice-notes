@@ -3,6 +3,13 @@ import { useEffect } from 'react';
 import { useRegisterSW } from 'virtual:pwa-register/react';
 import { Button } from '../design/components/Button';
 
+/**
+ * Whether a service worker controlled this page when it loaded. If not, the page is watching
+ * the first install, which is never an update, whatever the browser reports.
+ */
+const loadedControlled =
+  typeof navigator !== 'undefined' && Boolean(navigator.serviceWorker?.controller);
+
 export function UpdatePrompt() {
   const {
     needRefresh: [needRefresh, setNeedRefresh],
@@ -11,9 +18,14 @@ export function UpdatePrompt() {
   } = useRegisterSW();
 
   // Firefox can report an update when the page is reloaded while the first service worker is
-  // still installing, with nothing actually waiting. Only a waiting worker is a new version.
+  // still installing. Only a waiting worker, seen by a page that already had one, is a new
+  // version.
   useEffect(() => {
     if (!needRefresh) return;
+    if (!loadedControlled) {
+      setNeedRefresh(false);
+      return;
+    }
     let cancelled = false;
     void navigator.serviceWorker?.getRegistration().then((registration) => {
       if (!cancelled && !registration?.waiting) setNeedRefresh(false);
