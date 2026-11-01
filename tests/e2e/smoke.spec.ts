@@ -1,4 +1,4 @@
-import { expect, test } from '@playwright/test';
+import { expect, test } from './fixtures';
 
 test('app shell renders and the browser supports Opus WebM recording', async ({ page }) => {
   await page.goto('/');

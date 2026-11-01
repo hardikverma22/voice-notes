@@ -1,5 +1,5 @@
 import AxeBuilder from '@axe-core/playwright';
-import { expect, test } from '@playwright/test';
+import { expect, test } from './fixtures';
 
 test('collects checklist items from notes and ticks them in the note', async ({ page }) => {
   await page.goto('/');

@@ -1,5 +1,5 @@
 import { readFileSync } from 'node:fs';
-import { expect, test } from '@playwright/test';
+import { expect, test } from './fixtures';
 import { ensureModelReady, noteMenu, sidebarNotes, stopAndOpenNote } from './helpers';
 
 test('record, reload, list, delete with undo, and permanent delete', async ({ page }) => {

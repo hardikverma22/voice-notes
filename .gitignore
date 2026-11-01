@@ -16,3 +16,4 @@ tests/fixtures/*.wav
 .agents/
 .taste-skill/
 skills-lock.json
+.cache/

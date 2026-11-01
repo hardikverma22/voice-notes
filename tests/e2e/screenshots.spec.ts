@@ -1,4 +1,4 @@
-import { expect, test, type Page } from '@playwright/test';
+import { expect, test, type Page } from './fixtures';
 import { readFile, writeFile } from 'node:fs/promises';
 import { ensureModelReady, stopAndOpenNote } from './helpers';
 
