@@ -47,6 +47,11 @@ Loom made for agents, but nothing leaves your device.
   or download it.
 - **Synced with your voice.** Frames sit on the audio timeline, and the filmstrip highlights the
   frame on screen as the recording plays.
+- **Reads the screen.** Text in every frame is read on your device (OCR) in the background.
+  Search finds a note by an error message that was only on screen, the viewer's
+  **Text on screen** panel lets you copy it, and exports include it for agents.
+- **Replay.** Press play and the frames follow your voice, like a video, with the sentence
+  being spoken highlighted.
 - **Export for agent.** One zip holds `report.md`, written so an agent reads each frame
   together with what you said about it, plus `report.html`, a single offline page anyone can
   open with clickable timestamps, the frames with your marks flattened in, and the audio.
@@ -389,6 +394,8 @@ What leaves your device:
   speech model (about 80 to 200 MB), and only if you use them, the Accurate speech model
   (about 410 MB) and the search model (about 24 MB).
 - **The ONNX runtime** for the model, from `cdn.jsdelivr.net`, also cached afterwards.
+- **The screen text reader** (Tesseract, about 5 MB), from `cdn.jsdelivr.net`, only once you
+  have a screen recording. It can be turned off in Settings → Screen recording.
 
 That's all. Audio, transcripts and notes are stored in your browser's IndexedDB. There are no
 accounts, analytics, telemetry or cloud sync. Clearing site data, or **Settings → Delete all
@@ -440,7 +447,7 @@ publishing. Any static host works: serve `dist/` over HTTPS.
 - [x] On-device semantic search across notes, with related notes
 - [x] Tasks page collecting checklist items from every note
 - [x] Screen recording with marked-up frames, and an export made for AI agents
-- [ ] Text in frames (on-device OCR), so search finds what was on screen
+- [x] Text in frames (on-device OCR), so search finds what was on screen
 - [ ] Folders, built on tags
 - [ ] Optional end-to-end encrypted sync between your own devices
 

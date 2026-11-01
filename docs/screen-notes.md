@@ -67,6 +67,19 @@ frame. People tend to say "now I open settings" just before the screen changes. 
 before the first frame goes to the first frame, so nothing said is dropped. The viewer and
 the export use the same function.
 
+## Reading the screen (`ocr.ts`, `ocrQueue.ts`)
+
+After a recording is saved, a background queue reads the text in each frame with Tesseract
+(English), one frame at a time, and pauses while Whisper works. Words below 55% confidence
+are dropped, and lines that are mostly symbols (icons read as characters) are filtered out.
+The text is stored on the frame (`text`: undefined while unread, `''` when there is none), and
+a note-level `screenText` rollup feeds library search. A match that is only on screen shows
+an **On screen** badge in the list.
+
+The reader loads on first use only, in its own chunk, so start-up JavaScript is unchanged. If
+it can't load (offline before its first download), the queue retries later. A frame that
+fails twice is stored as having no text, so it never blocks the rest.
+
 ## The export bundle
 
 ```
@@ -79,6 +92,8 @@ checkout-bug-2026-11-01.zip
 └── audio.webm
 ```
 
+Each frame in `report.md` also carries its **Text on screen** in a fenced block. The fence is
+always longer than any backtick run in the text, so code on screen can't break out of it.
 `report.md` starts with a short HTML comment telling an agent how to read it. It says that
 frames and the speech under them belong together, that the person's own notes take
 priority, and what the coloured marks mean. Everything a person wrote is escaped in

@@ -16,6 +16,11 @@ export default function App() {
   useEffect(() => {
     initModel();
     initSearch();
+    // Reads text in screen frames in the background; its code loads in its own chunk.
+    const timer = window.setTimeout(() => {
+      void import('./features/screen/ocrQueue').then(({ startOcrQueue }) => startOcrQueue());
+    }, 3000);
+    return () => window.clearTimeout(timer);
   }, []);
   return (
     <MotionProvider>

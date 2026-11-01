@@ -49,6 +49,7 @@ export function filterNotes(notes: Note[], query: string): Note[] {
       note.plainText,
       ...(note.tags ?? []).map((tag) => `#${tag}`),
       ...(note.bookmarks ?? []).map((bookmark) => bookmark.label),
+      note.screenText ?? '',
     ]
       .join('\n')
       .toLowerCase();
@@ -82,4 +83,22 @@ export function listTime(time: number, now = Date.now()): string {
     month: 'short',
     ...(sameYear ? {} : { year: 'numeric' }),
   }).format(time);
+}
+
+/**
+ * The passage to show for a note in the list. When the search matches only text read from the
+ * note's screen frames, shows that instead, marked as such.
+ */
+export function rowSnippet(
+  note: Pick<Note, 'plainText' | 'screenText'>,
+  query: string,
+  length = 140,
+): { text: string; onScreen: boolean } {
+  const words = query.toLowerCase().split(/\s+/).filter(Boolean);
+  const inBody = words.some((word) => note.plainText.toLowerCase().includes(word));
+  const screen = note.screenText ?? '';
+  if (words.length > 0 && !inBody && words.some((word) => screen.toLowerCase().includes(word))) {
+    return { text: snippet(screen, query, length), onScreen: true };
+  }
+  return { text: snippet(note.plainText, query, length), onScreen: false };
 }

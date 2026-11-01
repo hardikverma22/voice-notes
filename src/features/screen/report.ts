@@ -14,6 +14,8 @@ export interface ReportFrame {
   marked: boolean;
   /** What was said while this frame was on screen. */
   text: string;
+  /** Text read from the frame itself (error messages, code, labels), if any. */
+  screenText?: string;
   /** For the HTML page: the image inlined as a data: URL. */
   dataUrl?: string;
 }
@@ -47,6 +49,14 @@ export function extensionForImage(mimeType: string): string {
 }
 
 const clock = (t: number) => formatDuration(t * 1000);
+
+/** Longest screen text kept per frame in the report; screenshots of long pages can run on. */
+const MAX_SCREEN_TEXT = 2000;
+
+function clip(text: string): string {
+  const trimmed = text.trim();
+  return trimmed.length > MAX_SCREEN_TEXT ? `${trimmed.slice(0, MAX_SCREEN_TEXT)}\n…` : trimmed;
+}
 
 const PENDING =
   'The transcript was still being written when this was exported, so some speech may be missing. The audio is complete.';
@@ -88,6 +98,9 @@ export function buildReportMarkdown(input: ReportInput): string {
         (marked
           ? ' Coloured arrows, boxes and highlights were drawn by the person to point at something.'
           : '') +
+        (input.frames.some((frame) => frame.screenText?.trim())
+          ? ' "Text on screen" was read from the frame by OCR and may contain small errors.'
+          : '') +
         ' -->',
       '',
     );
@@ -106,6 +119,12 @@ export function buildReportMarkdown(input: ReportInput): string {
         '',
       );
       if (frame.text) out.push(quote(frame.text), '');
+      if (frame.screenText?.trim()) {
+        // A fence longer than any backtick run inside, so code on screen cannot close it.
+        const longest = Math.max(2, ...(frame.screenText.match(/`+/g) ?? []).map((m) => m.length));
+        const fence = '`'.repeat(longest + 1);
+        out.push('Text on screen:', '', `${fence}text`, clip(frame.screenText), fence, '');
+      }
     });
   }
 
@@ -167,6 +186,7 @@ export function buildReportHtml(input: ReportInput): string {
   <header>${seek(frame.t)}<h2>Frame ${index + 1}${frame.marked ? ' <span class="tag">marked up</span>' : ''}</h2></header>
   <img src="${escapeHtml(frame.dataUrl ?? frame.file)}" alt="Frame ${index + 1} at ${clock(frame.t)}" loading="lazy">
   ${frame.text ? `<blockquote>${escapeHtml(frame.text)}</blockquote>` : '<p class="muted">Nothing was said here.</p>'}
+  ${frame.screenText?.trim() ? `<details><summary>Text on screen</summary><pre>${escapeHtml(clip(frame.screenText))}</pre></details>` : ''}
 </section>`,
     )
     .join('\n');
@@ -201,6 +221,8 @@ button.t{cursor:pointer}button.t:hover{background:var(--bg)}
 audio{width:100%;position:sticky;top:8px;z-index:1}
 ol{list-style:none;padding:0;margin:0}ol li{padding:4px 0}
 footer{margin-top:48px;color:var(--muted);font-size:.85rem}
+details{margin-top:12px}summary{cursor:pointer;color:var(--muted);font-size:.9rem}
+pre{white-space:pre-wrap;font:.85rem/1.5 ui-monospace,monospace;background:var(--bg);border:1px solid var(--line);border-radius:8px;padding:10px;margin:8px 0 0}
 </style>
 </head>
 <body>

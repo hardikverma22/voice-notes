@@ -78,6 +78,7 @@ export async function exportZipBackup(database = db): Promise<{ blob: Blob } & B
       source: frame.source,
       strokes: frame.strokes,
       createdAt: frame.createdAt,
+      text: frame.text,
       path,
     });
   }

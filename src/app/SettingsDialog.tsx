@@ -4,6 +4,7 @@ import { Dialog } from '../design/components/Dialog';
 import { Kbd } from '../design/components/Kbd';
 import { ProgressBar } from '../design/components/ProgressBar';
 import { Segmented } from '../design/components/Segmented';
+import { isOcrEnabled, setOcrEnabled } from '../features/screen/ocrQueue';
 import { Select } from '../design/components/Select';
 import { useToast } from '../design/components/useToast';
 import {
@@ -64,6 +65,7 @@ export function SettingsDialog({ open, onClose }: { open: boolean; onClose: () =
         <AppearanceSection />
         <TranscriptionSection />
         <SearchSection />
+        <ScreenSection />
         <ModelsSection open={open} />
         <DataSection open={open} />
         <ShortcutsSection />
@@ -647,10 +649,37 @@ function DeveloperSection() {
   );
 }
 
+function ScreenSection() {
+  const [enabled, setEnabled] = useState(() => isOcrEnabled());
+  return (
+    <Section title="Screen recording">
+      <div className="flex flex-col gap-2">
+        <Segmented<'on' | 'off'>
+          label="Read text in screen frames"
+          value={enabled ? 'on' : 'off'}
+          onChange={(next) => {
+            setOcrEnabled(next === 'on');
+            setEnabled(next === 'on');
+          }}
+          options={[
+            { value: 'on', label: 'Read text' },
+            { value: 'off', label: 'Off' },
+          ]}
+        />
+        <p className="text-sm text-fg-muted text-pretty">
+          Reads the text in each frame on this device, so search finds what was on screen and
+          exports include it. Downloads a small reader (about 5 MB) the first time.
+        </p>
+      </div>
+    </Section>
+  );
+}
+
 function ShortcutsSection() {
   const rows: [ReactNode, string][] = [
     [<Kbd key="s">Space</Kbd>, 'Start or stop recording (home)'],
     [<Kbd key="m">M</Kbd>, 'Mark a moment while recording'],
+    [<Kbd key="sn">S</Kbd>, 'Take a frame while sharing the screen'],
     [
       <span key="k" className="inline-flex gap-1">
         <Kbd>⌘</Kbd>

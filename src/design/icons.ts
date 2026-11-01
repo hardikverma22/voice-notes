@@ -58,6 +58,7 @@ export {
   XIcon,
   DesktopIcon,
   MonitorIcon,
+  TextTIcon,
   CameraIcon,
   ArrowUpRightIcon,
   SquareIcon,
