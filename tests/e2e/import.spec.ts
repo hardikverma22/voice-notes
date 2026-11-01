@@ -1,5 +1,5 @@
 import { existsSync } from 'node:fs';
-import { expect, test } from '@playwright/test';
+import { expect, test } from './fixtures';
 import { ensureModelReady } from './helpers';
 
 test.describe('import', () => {

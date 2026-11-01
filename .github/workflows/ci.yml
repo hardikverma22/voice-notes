@@ -61,3 +61,32 @@ jobs:
           name: playwright-${{ matrix.browser }}
           path: test-results
           retention-days: 7
+
+  e2e-full:
+    name: E2E full suite (chromium, speech model)
+    runs-on: ubuntu-latest
+    timeout-minutes: 40
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version-file: .nvmrc
+          cache: npm
+      - run: npm ci --ignore-scripts
+      - run: npx playwright install --with-deps chromium
+      # Model and runtime downloads, served to tests from disk (tests/e2e/fixtures.ts).
+      - uses: actions/cache@v4
+        with:
+          path: .cache/e2e-net
+          key: e2e-net-${{ hashFiles('src/features/transcribe/config.ts', 'src/features/search/config.ts', 'package-lock.json') }}
+          restore-keys: e2e-net-
+      - run: node scripts/make-fixture.mjs
+      # Everything except the README screenshot generator. Specs that need spoken audio skip
+      # off macOS (the fixture is made with `say`).
+      - run: npx playwright test --project=chromium --grep-invert "README screenshots"
+      - if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: playwright-full
+          path: test-results
+          retention-days: 7
