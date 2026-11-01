@@ -39,6 +39,8 @@ export interface Note {
    * added audio starts, so only that part is transcribed and appended to the existing text.
    */
   pendingAppend: { offsetSec: number } | null;
+  /** Text read from the note's screen frames, for search. Derived from the frames. */
+  screenText?: string;
 }
 export interface AudioRecord {
   id: string;
@@ -101,6 +103,8 @@ export interface Frame {
   source: 'auto' | 'manual';
   strokes: Stroke[];
   createdAt: number;
+  /** Text read from the frame on this device. Undefined until read; '' when there is none. */
+  text?: string;
 }
 
 export class VoiceNotesDB extends Dexie {

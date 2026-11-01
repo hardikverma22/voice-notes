@@ -11,6 +11,7 @@ import {
   PauseIcon,
   PencilSimpleIcon,
   PlayIcon,
+  TextTIcon,
   SelectionSlashIcon,
   SquareIcon,
   TrashIcon,
@@ -71,6 +72,7 @@ export function FrameViewer({
   const [color, setColor] = useState<string>(INK[0].value);
   const [strokes, setStrokes] = useState<Stroke[]>(frame.strokes);
   const [draft, setDraft] = useState<Stroke | null>(null);
+  const [showText, setShowText] = useState(false);
   const panelRef = useRef<HTMLDivElement>(null);
   const surfaceRef = useRef<HTMLDivElement>(null);
 
@@ -264,6 +266,13 @@ export function FrameViewer({
 
         <div className="flex items-center gap-0.5 sm:gap-1">
           <ViewerButton
+            label="Text on screen"
+            hint="The text read from this frame, to copy or check"
+            icon={TextTIcon}
+            pressed={showText}
+            onClick={() => setShowText((value) => !value)}
+          />
+          <ViewerButton
             label="Copy image"
             hint="With your marks, ready to paste into ChatGPT, Claude, Slack or an issue"
             icon={CopyIcon}
@@ -368,6 +377,7 @@ export function FrameViewer({
           />
           <StrokeLayer frame={frame} strokes={shown} />
         </div>
+        {showText ? <ScreenTextPanel text={frame.text} onClose={() => setShowText(false)} /> : null}
         <ViewerButton
           label="Next frame"
           hint="→"
@@ -453,6 +463,56 @@ function ViewerButton({
     >
       <IconComponent aria-hidden="true" weight="bold" className="size-[1.1rem]" />
     </button>
+  );
+}
+
+/** The text read from the frame, over the right side of the viewer, with a copy button. */
+function ScreenTextPanel({ text, onClose }: { text: string | undefined; onClose(): void }) {
+  const toast = useToast();
+  async function copy() {
+    if (!text) return;
+    try {
+      await navigator.clipboard.writeText(text);
+      toast.show({ tone: 'success', message: 'Text copied', durationMs: 2000 });
+    } catch {
+      toast.show({ tone: 'error', message: 'Could not copy. Select the text instead.' });
+    }
+  }
+  return (
+    <aside
+      aria-label="Text on screen"
+      className="absolute inset-y-2 right-14 z-10 flex w-[min(22rem,calc(100%-7rem))] flex-col rounded-lg border border-white/15 bg-[#151517]/95 shadow-2xl backdrop-blur sm:right-16"
+    >
+      <div className="flex items-center gap-2 border-b border-white/10 px-3 py-2">
+        <p className="mr-auto text-sm font-medium">Text on screen</p>
+        <button
+          type="button"
+          onClick={() => void copy()}
+          disabled={!text}
+          className="inline-flex min-h-8 items-center gap-1.5 rounded-full bg-white px-3 text-xs font-semibold text-black disabled:opacity-40 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-white"
+        >
+          <CopyIcon aria-hidden="true" weight="bold" className="size-3.5" />
+          Copy text
+        </button>
+        <ViewerButton label="Close text" icon={XIcon} onClick={onClose} tipAlign="end" />
+      </div>
+      <div className="min-h-0 flex-1 overflow-y-auto p-3">
+        {text === undefined ? (
+          <p className="text-sm text-white/60">
+            Reading the text on this frame… It runs on your device in the background.
+          </p>
+        ) : text ? (
+          <pre className="font-mono text-xs leading-relaxed whitespace-pre-wrap text-white/90 select-text">
+            {text}
+          </pre>
+        ) : (
+          <p className="text-sm text-white/60">No text found on this frame.</p>
+        )}
+      </div>
+      <p className="border-t border-white/10 px-3 py-2 text-[0.7rem] text-white/45">
+        Read on this device by OCR. It may have small mistakes. Included in Export for agent.
+      </p>
+    </aside>
   );
 }
 

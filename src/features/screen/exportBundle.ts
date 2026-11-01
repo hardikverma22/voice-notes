@@ -45,6 +45,7 @@ export async function buildBundle(note: Note, noteMarkdown: string): Promise<Bun
       t: frame.t,
       marked: frame.strokes.length > 0,
       text,
+      screenText: frame.text,
       dataUrl: await toDataUrl(image),
     });
   }

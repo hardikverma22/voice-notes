@@ -80,3 +80,32 @@ export async function frameCountsByNote(database = db): Promise<Map<string, numb
   }
   return counts;
 }
+
+/** A note's screen text for search: each frame's text, in time order. */
+export function screenTextOf(frames: Pick<Frame, 't' | 'text'>[]): string {
+  return [...frames]
+    .sort((a, b) => a.t - b.t)
+    .map((frame) => frame.text?.trim() ?? '')
+    .filter(Boolean)
+    .join('\n\n');
+}
+
+/** Stores the text read from a frame, and refreshes its note's screen text. */
+export async function setFrameText(id: string, text: string, database = db): Promise<void> {
+  await database.transaction('rw', [database.frames, database.notes], async () => {
+    const frame = await database.frames.get(id);
+    if (!frame) return;
+    await database.frames.update(id, { text });
+    if (!frame.noteId) return;
+    const frames = await database.frames.where('noteId').equals(frame.noteId).toArray();
+    await database.notes.update(frame.noteId, { screenText: screenTextOf(frames) });
+  });
+}
+
+/** Adopted frames whose text has not been read yet, oldest first. */
+export async function listUnreadFrames(database = db): Promise<Frame[]> {
+  const frames = await database.frames
+    .filter((f) => f.noteId !== null && f.text === undefined)
+    .toArray();
+  return frames.sort((a, b) => a.createdAt - b.createdAt);
+}

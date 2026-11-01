@@ -34,7 +34,7 @@ import { MeaningResults } from '../search/MeaningResults';
 import { ImportButton } from '../import/ImportControls';
 import { TasksLink } from '../tasks/TasksLink';
 import { createTextNote } from './createTextNote';
-import { filterNotes, groupNotes, listTime, snippet } from './groupNotes';
+import { filterNotes, groupNotes, listTime, rowSnippet } from './groupNotes';
 import { Highlight } from './Highlight';
 import { StatusBadge } from './StatusBadge';
 
@@ -326,7 +326,7 @@ function NoteRow({
   const rowRef = useRef<HTMLLIElement>(null);
   const linkRef = useRef<HTMLAnchorElement>(null);
   const [renaming, setRenaming] = useState(false);
-  const text = snippet(note.plainText, query, compact ? 110 : 160);
+  const { text, onScreen } = rowSnippet(note, query, compact ? 110 : 160);
   const title = note.title || 'Untitled note';
   const rowClass = `block rounded-md px-3 py-3 pr-20 transition-colors focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-focus ${active ? 'bg-accent-soft' : compact ? 'hover:bg-surface-2' : 'border border-border bg-surface shadow-sm hover:border-control'}`;
 
@@ -415,6 +415,12 @@ function NoteRow({
         <span
           className={`mt-1 line-clamp-2 block text-fg-muted ${compact ? 'text-[0.8rem] leading-snug' : 'text-sm'}`}
         >
+          {onScreen ? (
+            <span className="mr-1 inline-flex items-center gap-0.5 rounded-sm bg-surface-2 px-1 text-[0.7rem] font-medium text-fg">
+              <ImagesIcon aria-hidden="true" className="size-3" />
+              On screen
+            </span>
+          ) : null}
           <Highlight text={text} query={query} />
         </span>
       ) : note.status === 'queued' || note.status === 'transcribing' ? (
