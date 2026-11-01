@@ -1,7 +1,11 @@
 import { defineConfig, devices } from '@playwright/test';
+import { existsSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 
-const speechWav = fileURLToPath(new URL('./tests/fixtures/speech.wav', import.meta.url));
+// speech.wav needs macOS `say`; elsewhere (CI) the fake microphone plays the generated tone.
+const fixture = (name: string) =>
+  fileURLToPath(new URL(`./tests/fixtures/${name}`, import.meta.url));
+const speechWav = existsSync(fixture('speech.wav')) ? fixture('speech.wav') : fixture('tone.wav');
 
 // Specs that also run in Firefox (npx playwright test --project=firefox), which can fake both
 // a microphone and a shared screen. The rest rely on Chromium's fake audio file.
