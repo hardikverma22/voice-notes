@@ -233,3 +233,77 @@ textarea,
 .vn-prose:focus-visible {
   outline: none;
 }
+
+/*
+ * Tooltips: any element with data-tip shows it on hover (after a short delay) and on keyboard
+ * focus. Pure CSS, so no wrapper changes layout. A newline in data-tip starts a second line.
+ * data-tip-side="top" opens upwards; data-tip-align="start" | "end" keeps it on screen
+ * near an edge. The accessible name stays in aria-label; the tooltip is visual only.
+ */
+:where([data-tip]) {
+  position: relative;
+}
+[data-tip]::after {
+  content: attr(data-tip);
+  position: absolute;
+  z-index: 70;
+  top: calc(100% + 0.4rem);
+  left: 50%;
+  translate: -50% -2px;
+  width: max-content;
+  max-width: 16rem;
+  padding: 0.35rem 0.6rem;
+  border-radius: 0.45rem;
+  background: var(--vn-fg);
+  color: var(--vn-bg);
+  font: 500 0.75rem/1.35 var(--vn-font-sans);
+  letter-spacing: 0;
+  text-align: left;
+  white-space: pre-line;
+  box-shadow: var(--vn-shadow-md);
+  opacity: 0;
+  pointer-events: none;
+  transition:
+    opacity 120ms var(--vn-ease),
+    translate 120ms var(--vn-ease);
+}
+[data-tip]:hover::after {
+  opacity: 1;
+  translate: -50% 0;
+  transition-delay: 350ms;
+}
+[data-tip]:focus-visible::after {
+  opacity: 1;
+  translate: -50% 0;
+}
+[data-tip][disabled]::after,
+[data-tip][aria-disabled='true']::after {
+  display: none;
+}
+[data-tip-side='top']::after {
+  top: auto;
+  bottom: calc(100% + 0.4rem);
+}
+[data-tip-align='start']::after {
+  left: 0;
+  translate: 0 -2px;
+}
+[data-tip-align='end']::after {
+  left: auto;
+  right: 0;
+  translate: 0 -2px;
+}
+[data-tip-align]:hover::after,
+[data-tip-align]:focus-visible::after {
+  translate: 0 0;
+}
+/* Light ink on the dark frame viewer. */
+.vn-on-dark [data-tip]::after {
+  background: #ffffff;
+  color: #111111;
+}
+@media (hover: none) {
+  [data-tip]::after {
+    display: none;
+  }
+}

@@ -8,7 +8,13 @@ import {
   signature,
 } from '../../src/features/screen/sceneChange';
 import { isNegligible, strokePath, thin } from '../../src/features/screen/annotation';
-import { frameAt, pairSpeech } from '../../src/features/screen/timeline';
+import {
+  frameAt,
+  frameDuring,
+  pairSpeech,
+  playFrom,
+  segmentAt,
+} from '../../src/features/screen/timeline';
 import { fitWithin } from '../../src/features/screen/screenCapture';
 import type { Stroke } from '../../src/storage/db';
 
@@ -185,6 +191,26 @@ describe('timeline', () => {
     const paired = pairSpeech([{ t: 5 }], [seg(0, 'Hello.'), seg(1, '  ')]);
     expect(paired[0]!.text).toBe('Hello.');
     expect(paired[0]!.segments).toHaveLength(1);
+  });
+
+  it('follows playback with the same lead as the speech pairing', () => {
+    expect(frameDuring([], 3)).toBe(-1);
+    expect(frameDuring(frames, -5)).toBe(0); // before the first frame: show the first
+    expect(frameDuring(frames, 8.4)).toBe(0);
+    expect(frameDuring(frames, 8.6)).toBe(1); // 1.5 s lead
+    expect(playFrom({ t: 10 })).toBe(8.5);
+    expect(playFrom({ t: 0.5 })).toBe(0);
+    // Playing from a frame shows that frame straight away.
+    for (let i = 0; i < frames.length; i++) {
+      expect(frameDuring(frames, playFrom(frames[i]!))).toBe(i);
+    }
+  });
+
+  it('finds the segment being spoken', () => {
+    const segments = [seg(1, 'a'), seg(5, 'b'), seg(9, 'c')];
+    expect(segmentAt(segments, 0)).toBe(-1);
+    expect(segmentAt(segments, 5)).toBe(1);
+    expect(segmentAt(segments, 100)).toBe(2);
   });
 
   it('finds the frame on screen at a time', () => {

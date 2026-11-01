@@ -265,6 +265,7 @@ export function RecordingProvider({ children }: { children: ReactNode }) {
 
   const {
     status: screenStatus,
+    stream: screenStream,
     frameCount,
     lastFrameAt,
     supported: screenSupported,
@@ -285,6 +286,7 @@ export function RecordingProvider({ children }: { children: ReactNode }) {
       markCount,
       screen: {
         status: screenStatus,
+        stream: screenStream,
         frameCount,
         lastFrameAt,
         supported: screenSupported,
@@ -336,6 +338,7 @@ export function RecordingProvider({ children }: { children: ReactNode }) {
       targetNoteId,
       markCount,
       screenStatus,
+      screenStream,
       frameCount,
       lastFrameAt,
       screenSupported,

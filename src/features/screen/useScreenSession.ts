@@ -32,6 +32,7 @@ export function useScreenSession(options: Options) {
   /** Frame writes still in flight, so a save can wait for them before moving frames. */
   const pendingRef = useRef(new Set<Promise<unknown>>());
   const [status, setStatus] = useState<ScreenStatus>('off');
+  const [stream, setStream] = useState<MediaStream | null>(null);
   const [frameCount, setFrameCount] = useState(0);
   const [lastFrameAt, setLastFrameAt] = useState<number | null>(null);
 
@@ -39,6 +40,7 @@ export function useScreenSession(options: Options) {
     captureRef.current?.stop();
     captureRef.current = null;
     setStatus('off');
+    setStream(null);
   }, []);
 
   /** Starts sharing. Resolves to false when the person cancelled or it failed. */
@@ -51,6 +53,7 @@ export function useScreenSession(options: Options) {
         onEnded: () => {
           captureRef.current = null;
           setStatus('off');
+          setStream(null);
         },
         onFrame: (image, source) => {
           const sessionId = optionsRef.current.getSessionId();
@@ -66,6 +69,7 @@ export function useScreenSession(options: Options) {
           pendingRef.current.add(write);
         },
       });
+      setStream(captureRef.current.stream);
       setStatus('on');
       return true;
     } catch (error) {
@@ -97,6 +101,7 @@ export function useScreenSession(options: Options) {
 
   return {
     status,
+    stream,
     frameCount,
     lastFrameAt,
     supported: isScreenCaptureSupported(),

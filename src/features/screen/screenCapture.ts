@@ -27,6 +27,8 @@ export interface ScreenCaptureOptions {
 }
 
 export interface ScreenCapture {
+  /** The shared screen, for a live preview. */
+  stream: MediaStream;
   /** Takes a frame now. */
   snap(): Promise<void>;
   stop(): void;
@@ -139,6 +141,7 @@ export async function startScreenCapture(options: ScreenCaptureOptions): Promise
   });
 
   return {
+    stream,
     async snap() {
       if (stopped) return;
       const current = sample();

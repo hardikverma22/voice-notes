@@ -19,6 +19,8 @@ export interface RecordingContextValue {
   /** The screen shared alongside this recording, if any. */
   screen: {
     status: ScreenStatus;
+    /** The shared screen while sharing, for a live preview. */
+    stream: MediaStream | null;
     frameCount: number;
     /** Date.now() of the newest frame, for a brief flash in the UI. */
     lastFrameAt: number | null;

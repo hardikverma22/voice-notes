@@ -14,7 +14,9 @@ export function Segmented<T extends string>({
   value,
   options,
   onChange,
+  className = 'self-start',
 }: {
+  className?: string;
   label: string;
   value: T;
   options: Option<T>[];
@@ -25,7 +27,7 @@ export function Segmented<T extends string>({
     <div
       role="radiogroup"
       aria-label={label}
-      className="inline-flex self-start rounded-full bg-surface-2 p-1"
+      className={`inline-flex rounded-full bg-surface-2 p-1 ${className}`}
     >
       {options.map((option) => {
         const selected = option.value === value;
