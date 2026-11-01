@@ -12,18 +12,20 @@ import { formatDuration } from '../../lib/format';
 import type { Frame, Note } from '../../storage/db';
 import type { AudioPlayer } from '../notes/useAudioPlayer';
 import { FrameImage } from './FrameImage';
-import { FrameViewer } from './FrameViewer';
 import { frameDuring, pairSpeech, playFrom, segmentAt } from './timeline';
-import { useFrameUrls } from './useFrameUrls';
 
 /**
  * A note's screen recording: a large stage showing the frame that was on screen, which
- * follows the audio as it plays, and a filmstrip of every frame. Opens the full-screen viewer
- * to mark a frame up.
+ * follows the audio as it plays, and a filmstrip of every frame. The note page owns the
+ * full-screen viewer, so it stays open when this section remounts (the editor around it is
+ * re-created when a transcript finishes).
  */
 export function FramesStrip({
   note,
   frames,
+  urls,
+  viewing,
+  onOpen,
   player,
   onExport,
   exporting,
@@ -33,6 +35,11 @@ export function FramesStrip({
   note: Note;
   /** The note's frames in time order; undefined while loading. */
   frames: Frame[] | undefined;
+  urls: Map<string, string>;
+  /** The frame open in the viewer, if any; the stage follows it. */
+  viewing: number | null;
+  /** Opens the full-screen viewer on a frame. */
+  onOpen(index: number): void;
   player: AudioPlayer | null;
   /** Zips the note with its frames for an AI agent. */
   onExport(): void;
@@ -42,8 +49,6 @@ export function FramesStrip({
   /** 0..1 while the video renders, otherwise null. */
   videoProgress: number | null;
 }) {
-  const urls = useFrameUrls(frames);
-  const [open, setOpen] = useState<number | null>(null);
   const [picked, setPicked] = useState(0);
   const stripRef = useRef<HTMLOListElement>(null);
 
@@ -53,6 +58,7 @@ export function FramesStrip({
   // While playing, the stage follows the audio; afterwards it stays on the last frame shown.
   const live = playing && frames ? frameDuring(frames, now) : -1;
   if (live >= 0 && live !== picked) setPicked(live);
+  else if (live < 0 && viewing !== null && viewing !== picked) setPicked(viewing);
   const shown = Math.min(picked, Math.max(0, count - 1));
 
   useEffect(() => {
@@ -132,7 +138,7 @@ export function FramesStrip({
       >
         <button
           type="button"
-          onClick={() => setOpen(shown)}
+          onClick={() => onOpen(shown)}
           aria-label={`Open frame ${shown + 1} to mark it up`}
           className="block w-full cursor-zoom-in focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-focus"
         >
@@ -171,7 +177,7 @@ export function FramesStrip({
         <div className="absolute top-2 right-2 flex gap-1.5">
           <button
             type="button"
-            onClick={() => setOpen(shown)}
+            onClick={() => onOpen(shown)}
             data-tip={'Mark up\nDraw arrows, boxes and highlights'}
             data-tip-align="end"
             className="inline-flex min-h-9 items-center gap-1.5 rounded-full bg-black/70 px-3 text-sm font-medium text-white backdrop-blur hover:bg-black focus-visible:outline-2 focus-visible:outline-white"
@@ -192,7 +198,7 @@ export function FramesStrip({
             <button
               type="button"
               onClick={() => pick(index)}
-              onDoubleClick={() => setOpen(index)}
+              onDoubleClick={() => onOpen(index)}
               aria-current={index === shown ? 'true' : undefined}
               aria-label={`Frame ${index + 1} at ${formatDuration(entry.t * 1000)}${entry.strokes.length ? ', marked up' : ''}`}
               className={`group relative block w-32 overflow-hidden rounded-md border-2 text-left shadow-sm transition-[border-color,opacity] duration-(--vn-dur-fast) focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-focus sm:w-36 ${index === shown ? 'border-accent' : 'border-transparent opacity-70 hover:opacity-100'}`}
@@ -210,21 +216,6 @@ export function FramesStrip({
           </li>
         ))}
       </ol>
-
-      {open !== null && frames[open] ? (
-        <FrameViewer
-          frames={frames}
-          urls={urls}
-          index={open}
-          segments={note.segments}
-          player={player}
-          onIndex={(index) => {
-            setOpen(index);
-            setPicked(index);
-          }}
-          onClose={() => setOpen(null)}
-        />
-      ) : null}
     </section>
   );
 }

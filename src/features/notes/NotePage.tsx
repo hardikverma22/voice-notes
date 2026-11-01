@@ -49,6 +49,8 @@ import { RecordMorePanel } from './RecordMorePanel';
 import { StatusBadge } from './StatusBadge';
 import { RelatedNotes } from '../search/RelatedNotes';
 import { FramesStrip } from '../screen/FramesStrip';
+import { FrameViewer } from '../screen/FrameViewer';
+import { useFrameUrls } from '../screen/useFrameUrls';
 import { TagEditor } from './TagEditor';
 import { TranscriptView } from './TranscriptView';
 import { useAudioPlayer } from './useAudioPlayer';
@@ -85,6 +87,9 @@ function NoteView({ note, t }: { note: Note; t: number | null }) {
   const [videoProgress, setVideoProgress] = useState<number | null>(null);
   const rec = useRecording();
   const frames = useLiveQuery(() => listNoteFrames(note.id), [note.id]);
+  const frameUrls = useFrameUrls(frames);
+  /** The frame open in the full-screen viewer. Kept here, outside the editor, which remounts. */
+  const [viewing, setViewing] = useState<number | null>(null);
   const allTags = useLiveQuery(
     async () => collectTags(await listNotes()).map((entry) => entry.tag),
     [],
@@ -393,6 +398,9 @@ function NoteView({ note, t }: { note: Note; t: number | null }) {
               <FramesStrip
                 note={note}
                 frames={frames}
+                urls={frameUrls}
+                viewing={viewing}
+                onOpen={setViewing}
                 player={clipUrl ? player : null}
                 onExport={() => void exportBundle()}
                 exporting={exporting}
@@ -432,6 +440,18 @@ function NoteView({ note, t }: { note: Note; t: number | null }) {
       />
 
       <RelatedNotes noteId={note.id} />
+
+      {viewing !== null && frames?.[viewing] ? (
+        <FrameViewer
+          frames={frames}
+          urls={frameUrls}
+          index={viewing}
+          segments={note.segments}
+          player={clipUrl ? player : null}
+          onIndex={setViewing}
+          onClose={() => setViewing(null)}
+        />
+      ) : null}
     </article>
   );
 }
