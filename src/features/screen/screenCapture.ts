@@ -17,8 +17,8 @@ export interface CapturedImage {
 }
 
 export interface ScreenCaptureOptions {
-  /** A new frame: the screen changed (auto) or the person asked for one (manual). */
-  onFrame(image: CapturedImage, source: 'auto' | 'manual'): void;
+  /** The screen changed and settled: a new frame to keep. */
+  onFrame(image: CapturedImage): void;
   /** The person stopped sharing from the browser's own controls. */
   onEnded(): void;
   /** Auto frames are skipped while this returns true (for example, recording is paused). */
@@ -29,8 +29,8 @@ export interface ScreenCaptureOptions {
 export interface ScreenCapture {
   /** The shared screen, for a live preview. */
   stream: MediaStream;
-  /** Takes a frame now. */
-  snap(): Promise<void>;
+  /** Takes a frame now. Resolves to the image, or null when sharing has stopped. */
+  snap(): Promise<CapturedImage | null>;
   stop(): void;
 }
 
@@ -119,7 +119,7 @@ export async function startScreenCapture(options: ScreenCaptureOptions): Promise
     busy = true;
     void encode()
       .then((image) => {
-        if (image && !stopped) options.onFrame(image, 'auto');
+        if (image && !stopped) options.onFrame(image);
       })
       .finally(() => {
         busy = false;
@@ -143,11 +143,11 @@ export async function startScreenCapture(options: ScreenCaptureOptions): Promise
   return {
     stream,
     async snap() {
-      if (stopped) return;
+      if (stopped) return null;
       const current = sample();
       if (current) scene = keptManually(current, performance.now());
       const image = await encode();
-      if (image && !stopped) options.onFrame(image, 'manual');
+      return image && !stopped ? image : null;
     },
     stop,
   };

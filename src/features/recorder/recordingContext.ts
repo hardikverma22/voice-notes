@@ -1,4 +1,5 @@
 import { createContext, useContext } from 'react';
+import type { Frame } from '../../storage/db';
 import type { ScreenStatus } from '../screen/useScreenSession';
 import type { LiveState } from '../transcribe/merge';
 import type { RecorderErrorCode } from './recorder';
@@ -39,6 +40,11 @@ export interface RecordingContextValue {
   stopScreen(): void;
   /** Takes a frame of the shared screen now. */
   snap(): void;
+  /** Takes a frame and opens it to draw on while the recording keeps going. */
+  drawNow(): void;
+  endDraw(): void;
+  /** The frame being drawn on during the recording, if any. */
+  drawingFrame: Frame | null;
   pause(): void;
   resume(): void;
   discard(): void;

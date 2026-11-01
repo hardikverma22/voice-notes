@@ -34,6 +34,27 @@ test.describe('screen recording', () => {
     await expect(page.getByText(/^([2-9]|\d{2,}) frames kept$/)).toBeVisible();
     await expectNoAxeViolations(page);
 
+    // D freezes a frame to draw on while the recording keeps going; Enter goes back.
+    await page.keyboard.press('d');
+    const live = page.getByRole('dialog', { name: 'Draw on the screen' });
+    await expect(live).toBeVisible();
+    await expect(live).toContainText('Still recording');
+    await expectNoAxeViolations(page);
+    const liveSurface = live.getByTestId('draw-surface');
+    const liveBox = (await liveSurface.boundingBox())!;
+    await page.mouse.move(liveBox.x + liveBox.width * 0.4, liveBox.y + liveBox.height * 0.6);
+    await page.mouse.down();
+    await page.mouse.move(liveBox.x + liveBox.width * 0.6, liveBox.y + liveBox.height * 0.3, {
+      steps: 5,
+    });
+    await page.mouse.up();
+    await expect(liveSurface.locator('path')).toHaveCount(1);
+    const clock = page.getByLabel(/^Elapsed /);
+    const before = await clock.getAttribute('aria-label');
+    await page.keyboard.press('Enter');
+    await expect(live).toBeHidden();
+    await expect(clock).not.toHaveAttribute('aria-label', before!); // still recording
+
     await page.getByRole('button', { name: 'Stop recording' }).click();
     await expect(shared).toBeHidden();
     await page.getByRole('button', { name: 'Open note' }).click();
@@ -77,10 +98,11 @@ test.describe('screen recording', () => {
     await page.keyboard.press('Escape');
     await expect(viewer).toBeHidden();
     // The drawing is saved: the thumbnail shows it now, and still after a reload.
+    // Two frames are marked up: the one drawn on during the recording, and this one.
     const markedUp = page.getByRole('button', { name: /^Frame \d+ at .*, marked up$/ });
-    await expect(markedUp).toHaveCount(1);
+    await expect(markedUp).toHaveCount(2);
     await page.reload();
-    await expect(markedUp).toHaveCount(1);
+    await expect(markedUp).toHaveCount(2);
 
     // Replay: playing from frame 1 moves the viewer to the next frame on its own.
     await page.getByTestId('frames').getByRole('button').first().click();

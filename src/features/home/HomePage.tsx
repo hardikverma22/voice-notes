@@ -1,6 +1,6 @@
 import { useLiveQuery } from 'dexie-react-hooks';
 import { AnimatePresence, m } from 'motion/react';
-import { useEffect } from 'react';
+import { lazy, Suspense, useEffect } from 'react';
 import { Button, IconButton } from '../../design/components/Button';
 import { Kbd } from '../../design/components/Kbd';
 import {
@@ -21,7 +21,6 @@ import { MarkButton } from '../notes/RecordMorePanel';
 import { StatusBadge } from '../notes/StatusBadge';
 import { RecordButton } from '../recorder/RecordButton';
 import { useCaptureMode } from '../screen/captureMode';
-import { ScreenControls } from '../screen/ScreenControls';
 import { Segmented } from '../../design/components/Segmented';
 import { useRecording } from '../recorder/recordingContext';
 import type { RecorderErrorCode } from '../recorder/recorder';
@@ -41,6 +40,11 @@ const ERROR_TEXT: Record<RecorderErrorCode, string> = {
   'insecure-context': 'Recording needs a secure connection (https or localhost).',
   unknown: 'Something went wrong while starting the microphone.',
 };
+
+// Only shown during a recording; loads in its own chunk to keep start-up small.
+const ScreenControls = lazy(() =>
+  import('../screen/ScreenControls').then((module) => ({ default: module.ScreenControls })),
+);
 
 function greeting(now = new Date()): string {
   const hour = now.getHours();
@@ -231,7 +235,9 @@ export default function HomePage() {
               </p>
               {!rec.targetNoteId ? (
                 <div className="mt-3 flex w-full justify-center">
-                  <ScreenControls disabled={rec.state === 'stopping'} />
+                  <Suspense fallback={null}>
+                    <ScreenControls disabled={rec.state === 'stopping'} />
+                  </Suspense>
                 </div>
               ) : null}
             </m.div>
