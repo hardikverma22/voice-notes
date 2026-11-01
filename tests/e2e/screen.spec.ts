@@ -133,6 +133,28 @@ test.describe('screen recording', () => {
     expect(html).toContain('<audio id="audio"');
     expect(html.match(/src="data:image\//g)?.length).toBe(frameFiles.length);
 
+    // Export video: an MP4 the browser can play back, at 1080p, as long as the recording.
+    const rendering = page.waitForEvent('download', { timeout: 60_000 });
+    await page.getByRole('button', { name: 'Video' }).click();
+    const videoFile = await rendering;
+    expect(videoFile.suggestedFilename()).toMatch(/\.mp4$/);
+    const mp4 = await readFile((await videoFile.path())!);
+    expect(mp4.subarray(4, 8).toString('latin1')).toBe('ftyp');
+    const meta = await page.evaluate(async (b64) => {
+      const bytes = Uint8Array.from(atob(b64), (c) => c.charCodeAt(0));
+      const video = document.createElement('video');
+      video.muted = true;
+      video.src = URL.createObjectURL(new Blob([bytes], { type: 'video/mp4' }));
+      await new Promise((resolve, reject) => {
+        video.onloadeddata = resolve;
+        video.onerror = () => reject(new Error(video.error?.message ?? 'video error'));
+      });
+      return { width: video.videoWidth, height: video.videoHeight, duration: video.duration };
+    }, mp4.toString('base64'));
+    expect(meta).toMatchObject({ width: 1920, height: 1080 });
+    expect(meta.duration).toBeGreaterThan(2);
+    expect(meta.duration).toBeLessThan(30);
+
     expect(consoleErrors).toEqual([]);
   });
 });

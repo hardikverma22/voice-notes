@@ -54,6 +54,9 @@ Loom made for agents, but nothing leaves your device.
   **Text on screen** panel lets you copy it, and exports include it for agents.
 - **Replay.** Press play and the frames follow your voice, like a video, with the sentence
   being spoken highlighted.
+- **Export video.** One click renders an MP4 of your screen, your marks and your voice, with
+  captions of what you said, ready for Slack, a pull request or an email. It's encoded on your
+  device with WebCodecs, much faster than real time.
 - **Export for agent.** One zip holds `report.md`, written so an agent reads each frame
   together with what you said about it, plus `report.html`, a single offline page anyone can
   open with clickable timestamps, the frames with your marks flattened in, and the audio.
@@ -155,6 +158,14 @@ Loom made for agents, but nothing leaves your device.
   <tr>
     <td align="center"><sub><b>Screen notes</b>: filmstrip, marks, export for agent</sub></td>
     <td align="center"><sub><b>Frame viewer</b>: pen, highlighter, arrow, box</sub></td>
+  </tr>
+  <tr>
+    <td><img src="docs/screenshots/screen-video-still.jpg" alt="A still from an exported video: the marked-up checkout frame with a caption of what was said" /></td>
+    <td><img src="docs/screenshots/screen-viewer-tooltip.png" alt="Frame viewer with a tooltip explaining Copy image" /></td>
+  </tr>
+  <tr>
+    <td align="center"><sub><b>Exported video</b>: frames, marks, captions and voice</sub></td>
+    <td align="center"><sub><b>Tooltips</b>: every control says what it does</sub></td>
   </tr>
   <tr>
     <td><img src="docs/screenshots/note-dark.png" alt="Note page in dark mode" /></td>
