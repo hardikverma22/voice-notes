@@ -15,7 +15,7 @@ import {
   playFrom,
   segmentAt,
 } from '../../src/features/screen/timeline';
-import { fitWithin } from '../../src/features/screen/screenCapture';
+import { encodeCanvas, fitWithin } from '../../src/features/screen/screenCapture';
 import type { Stroke } from '../../src/storage/db';
 
 const flat = (value: number, size = 16) => new Uint8Array(size).fill(value);
@@ -218,5 +218,31 @@ describe('timeline', () => {
     expect(frameAt(frames, 0)).toBe(0);
     expect(frameAt(frames, 15)).toBe(1);
     expect(frameAt(frames, 99)).toBe(2);
+  });
+});
+
+describe('encodeCanvas', () => {
+  const canvas = (supported: string[]) => {
+    const asked: string[] = [];
+    return {
+      asked,
+      toBlob(callback: BlobCallback, type = 'image/png') {
+        asked.push(type);
+        // Like Safari: an unsupported type falls back to PNG rather than failing.
+        callback(new Blob(['x'], { type: supported.includes(type) ? type : 'image/png' }));
+      },
+    };
+  };
+
+  it('uses WebP where the browser can encode it', async () => {
+    const c = canvas(['image/webp', 'image/jpeg']);
+    expect((await encodeCanvas(c))?.type).toBe('image/webp');
+    expect(c.asked).toEqual(['image/webp']);
+  });
+
+  it('falls back to JPEG, not PNG, where WebP is unsupported (Safari)', async () => {
+    const c = canvas(['image/jpeg']);
+    expect((await encodeCanvas(c))?.type).toBe('image/jpeg');
+    expect(c.asked).toEqual(['image/webp', 'image/jpeg']);
   });
 });
