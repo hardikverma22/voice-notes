@@ -1,6 +1,16 @@
-import { expect, test } from '@playwright/test';
+import AxeBuilder from '@axe-core/playwright';
+import { expect, test, type Page } from '@playwright/test';
 import { readFile } from 'node:fs/promises';
 import { strFromU8, unzipSync } from 'fflate';
+
+async function expectNoAxeViolations(page: Page) {
+  const results = await new AxeBuilder({ page }).withTags(['wcag2a', 'wcag2aa']).analyze();
+  expect(
+    results.violations.map(
+      (v) => `${v.id}: ${v.nodes.map((n) => `${n.target} ${n.any[0]?.message ?? ''}`).join(', ')}`,
+    ),
+  ).toEqual([]);
+}
 
 test.describe('screen recording', () => {
   test('records with a shared screen, then marks up a frame on the note', async ({ page }) => {
@@ -19,6 +29,7 @@ test.describe('screen recording', () => {
     await page.waitForTimeout(500);
     await page.keyboard.press('s');
     await expect(page.getByText(/· ([2-9]|\d{2,}) frames/)).toBeVisible();
+    await expectNoAxeViolations(page);
 
     await page.getByRole('button', { name: 'Stop recording' }).click();
     await expect(page.getByText('Sharing screen')).toBeHidden();
@@ -31,6 +42,7 @@ test.describe('screen recording', () => {
 
     const viewer = page.getByRole('dialog', { name: /^Frame 1 of/ });
     await expect(viewer).toBeVisible();
+    await expectNoAxeViolations(page);
     const surface = viewer.getByTestId('draw-surface');
     const box = (await surface.boundingBox())!;
     await page.mouse.move(box.x + box.width * 0.2, box.y + box.height * 0.2);

@@ -19,12 +19,14 @@ import {
   NotePencilIcon,
   PushPinIcon,
   WaveformIcon,
+  ImagesIcon,
   XIcon,
 } from '../../design/icons';
 import { formatDuration } from '../../lib/format';
 import { collectTags } from '../../lib/tags';
 import type { Note } from '../../storage/db';
 import { getAudio } from '../../storage/audio';
+import { frameCountsByNote } from '../../storage/frames';
 import { deleteNote, listNotes, renameNote, restoreNote, setPinned } from '../../storage/notes';
 import { extensionFor } from '../recorder/mime';
 import { downloadBlob, fileNameFor } from './exportNote';
@@ -38,12 +40,13 @@ import { StatusBadge } from './StatusBadge';
 
 export const FOCUS_SEARCH_EVENT = 'vn:focus-search';
 
-type Filter = 'all' | 'pinned' | 'audio';
+type Filter = 'all' | 'pinned' | 'audio' | 'screen';
 const VISIBLE_TAGS = 6;
 const FILTERS: { value: Filter; label: string }[] = [
   { value: 'all', label: 'All' },
   { value: 'pinned', label: 'Pinned' },
   { value: 'audio', label: 'With audio' },
+  { value: 'screen', label: 'With screen' },
 ];
 
 /**
@@ -52,6 +55,7 @@ const FILTERS: { value: Filter; label: string }[] = [
  */
 export function NotesLibrary({ variant }: { variant: 'sidebar' | 'page' }) {
   const notes = useLiveQuery(() => listNotes(), []);
+  const frameCounts = useLiveQuery(() => frameCountsByNote(), []);
   const route = useHashRoute();
   const activeId = route.name === 'note' ? route.id : null;
   const [query, setQuery] = useState('');
@@ -85,7 +89,13 @@ export function NotesLibrary({ variant }: { variant: 'sidebar' | 'page' }) {
   }
   const scoped = notes.filter(
     (note) =>
-      (filter === 'pinned' ? note.pinned : filter === 'audio' ? note.audioId !== null : true) &&
+      (filter === 'pinned'
+        ? note.pinned
+        : filter === 'audio'
+          ? note.audioId !== null
+          : filter === 'screen'
+            ? (frameCounts?.get(note.id) ?? 0) > 0
+            : true) &&
       (!activeTag || note.tags.some((t) => t.toLowerCase() === activeTag.toLowerCase())),
   );
   const filtered = filterNotes(scoped, deferredQuery);
@@ -96,7 +106,13 @@ export function NotesLibrary({ variant }: { variant: 'sidebar' | 'page' }) {
     ...notes.filter((note) => !scopedIds.has(note.id)).map((note) => note.id),
   ];
   const scopeLabel = [
-    filter === 'pinned' ? 'pinned' : filter === 'audio' ? 'recorded' : '',
+    filter === 'pinned'
+      ? 'pinned'
+      : filter === 'audio'
+        ? 'recorded'
+        : filter === 'screen'
+          ? 'screen-recorded'
+          : '',
     'notes',
     activeTag ? `tagged #${activeTag}` : '',
   ]
@@ -161,7 +177,10 @@ export function NotesLibrary({ variant }: { variant: 'sidebar' | 'page' }) {
         </label>
 
         <div role="group" aria-label="Filter notes" className="mt-3 flex flex-wrap gap-1.5">
-          {FILTERS.map((item) => (
+          {FILTERS.filter(
+            (item) =>
+              item.value !== 'screen' || (frameCounts?.size ?? 0) > 0 || filter === 'screen',
+          ).map((item) => (
             <button
               key={item.value}
               type="button"
@@ -267,6 +286,7 @@ export function NotesLibrary({ variant }: { variant: 'sidebar' | 'page' }) {
                             query={deferredQuery}
                             active={note.id === activeId}
                             compact={variant === 'sidebar'}
+                            frames={frameCounts?.get(note.id) ?? 0}
                           />
                         ))}
                       </AnimatePresence>
@@ -294,10 +314,12 @@ function NoteRow({
   query,
   active,
   compact,
+  frames,
 }: {
   note: Note;
   query: string;
   active: boolean;
+  frames: number;
   compact: boolean;
 }) {
   const toast = useToast();
@@ -415,6 +437,13 @@ function NoteRow({
             Text note
           </span>
         )}
+        {frames > 0 ? (
+          <span className="tabular inline-flex items-center gap-0.5">
+            <ImagesIcon aria-hidden="true" className="size-3.5" />
+            {frames}
+            <span className="sr-only">{frames === 1 ? ' screen frame' : ' screen frames'}</span>
+          </span>
+        ) : null}
         {note.bookmarks.length > 0 ? (
           <span className="tabular inline-flex items-center gap-0.5">
             <BookmarkSimpleIcon aria-hidden="true" className="size-3.5" />

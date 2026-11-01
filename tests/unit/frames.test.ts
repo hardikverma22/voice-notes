@@ -7,6 +7,7 @@ import {
   countSessionFrames,
   deleteFrame,
   discardSessionFrames,
+  frameCountsByNote,
   listNoteFrames,
   restoreFrame,
   setFrameStrokes,
@@ -102,5 +103,18 @@ describe('frames', () => {
 
     await deleteAllNotes(database);
     expect(await database.frames.count()).toBe(0);
+  });
+
+  it('counts frames per note from the index', async () => {
+    const a = await createNote(base, database);
+    const b = await createNote(base, database);
+    await addSessionFrame('s1', image(0), database);
+    await addSessionFrame('s1', image(1), database);
+    await adoptSessionFrames('s1', a.id, 0, database);
+    await addSessionFrame('s2', image(0), database);
+    await adoptSessionFrames('s2', b.id, 0, database);
+    await addSessionFrame('running', image(0), database);
+    const counts = await frameCountsByNote(database);
+    expect(Object.fromEntries(counts)).toEqual({ [a.id]: 2, [b.id]: 1 });
   });
 });

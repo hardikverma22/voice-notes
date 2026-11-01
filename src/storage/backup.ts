@@ -1,10 +1,11 @@
 import { strFromU8, strToU8, unzipSync, zipSync, type Zippable } from 'fflate';
 import { extensionFor } from '../features/recorder/mime';
-import { db, type AudioRecord, type Note } from './db';
+import { db, type AudioRecord, type Frame, type Note } from './db';
 import { importBackup } from './notes';
 
 /**
- * Full backup: a zip with manifest.json (every note) and audio/<id>.<ext> (every recording).
+ * Full backup: a zip with manifest.json (every note), audio/<id>.<ext> (every recording) and
+ * frames/<id>.<ext> (every screen frame, with its drawing kept as data).
  * Loaded on demand from Settings, so the zip code stays out of the main bundle.
  */
 
@@ -19,18 +20,30 @@ interface AudioEntry {
   path: string;
 }
 
+/** A frame without its image, which is stored at path. */
+type FrameEntry = Omit<Frame, 'blob' | 'sessionId'> & { path: string };
+
 interface Manifest {
   format: typeof FORMAT;
-  version: 2;
+  /** 2: notes and audio. 3: adds frames. */
+  version: 2 | 3;
   exportedAt: number;
   notes: Note[];
   audio: AudioEntry[];
+  frames?: FrameEntry[];
 }
 
 export interface BackupSummary {
   notes: number;
   recordings: number;
+  frames?: number;
 }
+
+const IMAGE_EXT: Record<string, string> = {
+  'image/webp': 'webp',
+  'image/png': 'png',
+  'image/jpeg': 'jpg',
+};
 
 export async function exportZipBackup(database = db): Promise<{ blob: Blob } & BackupSummary> {
   const notes = await database.notes.toArray();
@@ -49,12 +62,32 @@ export async function exportZipBackup(database = db): Promise<{ blob: Blob } & B
       path,
     });
   }
+  // Frames of a recording still running belong to no note yet; they are left out.
+  const frames = (await database.frames.toArray()).filter((frame) => frame.noteId);
+  const frameEntries: FrameEntry[] = [];
+  for (const frame of frames) {
+    const path = `frames/${frame.id}.${IMAGE_EXT[frame.mimeType] ?? 'img'}`;
+    files[path] = [new Uint8Array(await frame.blob.arrayBuffer()), { level: 0 }];
+    frameEntries.push({
+      id: frame.id,
+      noteId: frame.noteId,
+      t: frame.t,
+      mimeType: frame.mimeType,
+      width: frame.width,
+      height: frame.height,
+      source: frame.source,
+      strokes: frame.strokes,
+      createdAt: frame.createdAt,
+      path,
+    });
+  }
   const manifest: Manifest = {
     format: FORMAT,
-    version: 2,
+    version: 3,
     exportedAt: Date.now(),
     notes,
     audio: entries,
+    frames: frameEntries,
   };
   files[MANIFEST] = strToU8(JSON.stringify(manifest, null, 2));
   const zipped = zipSync(files, { level: 6 });
@@ -62,6 +95,7 @@ export async function exportZipBackup(database = db): Promise<{ blob: Blob } & B
     blob: new Blob([zipped as Uint8Array<ArrayBuffer>], { type: 'application/zip' }),
     notes: notes.length,
     recordings: entries.length,
+    frames: frameEntries.length,
   };
 }
 
@@ -101,9 +135,19 @@ export async function importAnyBackup(file: File, database = db): Promise<Backup
     else audioByNote.set(entry.noteId, [entry]);
   }
 
+  const framesByNote = new Map<string, FrameEntry[]>();
+  for (const entry of manifest.frames ?? []) {
+    if (!entry?.noteId) continue;
+    const list = framesByNote.get(entry.noteId);
+    if (list) list.push(entry);
+    else framesByNote.set(entry.noteId, [entry]);
+  }
+
   let notes = 0;
   let recordings = 0;
-  await database.transaction('rw', [database.notes, database.audio], async () => {
+  let frameCount = 0;
+  const tables = [database.notes, database.audio, database.frames];
+  await database.transaction('rw', tables, async () => {
     for (const note of manifest.notes ?? []) {
       if (!note?.id || typeof note.contentJson !== 'string') continue;
       if (await database.notes.get(note.id)) continue;
@@ -133,9 +177,22 @@ export async function importAnyBackup(file: File, database = db): Promise<Backup
         status: note.status === 'ready' || !audioId ? 'ready' : 'failed',
       });
       if (records.length > 0) await database.audio.bulkPut(records);
+      const frames: Frame[] = [];
+      for (const { path, ...entry } of framesByNote.get(note.id) ?? []) {
+        const data = files[path];
+        if (!data) continue;
+        frames.push({
+          ...entry,
+          sessionId: null,
+          strokes: Array.isArray(entry.strokes) ? entry.strokes : [],
+          blob: new Blob([data as Uint8Array<ArrayBuffer>], { type: entry.mimeType }),
+        });
+      }
+      if (frames.length > 0) await database.frames.bulkPut(frames);
       notes++;
       recordings += records.length;
+      frameCount += frames.length;
     }
   });
-  return { notes, recordings };
+  return { notes, recordings, frames: frameCount };
 }
