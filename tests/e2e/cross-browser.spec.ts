@@ -1,5 +1,8 @@
 import AxeBuilder from '@axe-core/playwright';
 import { expect, test } from '@playwright/test';
+import { readFile, writeFile } from 'node:fs/promises';
+
+const SW_PATH = 'dist/sw.js';
 
 // Runs in Chromium, Firefox and WebKit: the parts of screen recording every engine can show
 // without faking a shared screen.
@@ -52,4 +55,25 @@ test('a quick reload on the first visit does not claim an update', async ({ page
   await page.reload();
   await page.waitForTimeout(2500);
   await expect(page.getByText('A new version is ready')).toHaveCount(0);
+});
+
+test('a real new version still shows the update prompt', async ({ page, browserName }) => {
+  test.skip(
+    browserName === 'webkit',
+    'WebKit contexts here are ephemeral; checked in Chromium and Firefox',
+  );
+  await page.goto('/');
+  await page.waitForFunction(async () => Boolean((await navigator.serviceWorker.ready).active));
+  await page.reload(); // now controlled by the first version
+  await page.waitForFunction(() => Boolean(navigator.serviceWorker.controller));
+
+  // Deploy a "new version": change the service worker the preview server serves.
+  const original = await readFile(SW_PATH, 'utf8');
+  try {
+    await writeFile(SW_PATH, `${original}\n// next version ${Date.now()}\n`);
+    await page.evaluate(async () => (await navigator.serviceWorker.ready).update());
+    await expect(page.getByText('A new version is ready')).toBeVisible({ timeout: 15_000 });
+  } finally {
+    await writeFile(SW_PATH, original);
+  }
 });

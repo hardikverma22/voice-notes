@@ -33,7 +33,13 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        browser: [chromium, firefox]
+        include:
+          - browser: chromium
+            specs: tests/e2e/screen.spec.ts tests/e2e/screen-ocr.spec.ts tests/e2e/cross-browser.spec.ts tests/e2e/smoke.spec.ts
+          # Headless Firefox on Linux can't fake a shared screen (it can on macOS, where
+          # screen.spec runs locally with --project=firefox).
+          - browser: firefox
+            specs: tests/e2e/screen-ocr.spec.ts tests/e2e/cross-browser.spec.ts tests/e2e/smoke.spec.ts
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
@@ -46,10 +52,7 @@ jobs:
       # The fast specs: screen recording, drawing, replay, exports (zip and video), on-device
       # OCR, the home page and smoke checks. Specs that download the speech model (80+ MB per
       # test) run locally: npm run test:e2e.
-      - run: >-
-          npx playwright test --project=${{ matrix.browser }}
-          tests/e2e/screen.spec.ts tests/e2e/screen-ocr.spec.ts
-          tests/e2e/cross-browser.spec.ts tests/e2e/smoke.spec.ts
+      - run: npx playwright test --project=${{ matrix.browser }} ${{ matrix.specs }}
       - if: failure()
         uses: actions/upload-artifact@v4
         with:
