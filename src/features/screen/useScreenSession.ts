@@ -1,7 +1,9 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
+import type { Frame } from '../../storage/db';
 import { addSessionFrame } from '../../storage/frames';
 import {
   ScreenCaptureError,
+  type CapturedImage,
   isScreenCaptureSupported,
   startScreenCapture,
   type ScreenCapture,
@@ -43,6 +45,35 @@ export function useScreenSession(options: Options) {
     setStream(null);
   }, []);
 
+  /** Tracks work that ends in a frame write, so settle() can wait for it. */
+  const track = useCallback(<T>(work: Promise<T>): Promise<T> => {
+    const tracked = work.finally(() => pendingRef.current.delete(tracked));
+    pendingRef.current.add(tracked);
+    return tracked;
+  }, []);
+
+  /** Writes a frame under the running recording's session. */
+  const store = useCallback(
+    (image: CapturedImage, source: Frame['source']): Promise<Frame | null> => {
+      const sessionId = optionsRef.current.getSessionId();
+      if (!sessionId) return Promise.resolve(null);
+      const t = optionsRef.current.getTime();
+      return track(
+        addSessionFrame(sessionId, { ...image, t, source })
+          .then((frame) => {
+            setFrameCount((count) => count + 1);
+            setLastFrameAt(Date.now());
+            return frame;
+          })
+          .catch((error: unknown) => {
+            console.error('Could not save a screen frame', error);
+            return null;
+          }),
+      );
+    },
+    [track],
+  );
+
   /** Starts sharing. Resolves to false when the person cancelled or it failed. */
   const start = useCallback(async (): Promise<boolean> => {
     if (captureRef.current) return true;
@@ -55,19 +86,7 @@ export function useScreenSession(options: Options) {
           setStatus('off');
           setStream(null);
         },
-        onFrame: (image, source) => {
-          const sessionId = optionsRef.current.getSessionId();
-          if (!sessionId) return;
-          const t = optionsRef.current.getTime();
-          const write = addSessionFrame(sessionId, { ...image, t, source })
-            .then(() => {
-              setFrameCount((count) => count + 1);
-              setLastFrameAt(Date.now());
-            })
-            .catch((error: unknown) => console.error('Could not save a screen frame', error))
-            .finally(() => pendingRef.current.delete(write));
-          pendingRef.current.add(write);
-        },
+        onFrame: (image) => void store(image, 'auto'),
       });
       setStream(captureRef.current.stream);
       setStatus('on');
@@ -78,15 +97,16 @@ export function useScreenSession(options: Options) {
       if (code !== 'denied') optionsRef.current.onError(code);
       return false;
     }
-  }, []);
+  }, [store]);
 
-  const snap = useCallback(() => {
+  /** Takes a frame now. Resolves to the stored frame, or null. */
+  const snap = useCallback(async (): Promise<Frame | null> => {
     const capture = captureRef.current;
-    if (!capture) return;
+    if (!capture) return null;
     // The encode runs before the frame is written; count it as in flight too.
-    const shot = capture.snap().finally(() => pendingRef.current.delete(shot));
-    pendingRef.current.add(shot);
-  }, []);
+    const image = await track(capture.snap());
+    return image ? store(image, 'manual') : null;
+  }, [track, store]);
 
   /** Resolves once every frame taken so far is in IndexedDB. */
   const settle = useCallback(async () => {

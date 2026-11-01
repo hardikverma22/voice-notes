@@ -10,6 +10,7 @@ import { DropToImport, ImportButton } from '../features/import/ImportControls';
 import { TasksLink } from '../features/tasks/TasksLink';
 import { ModelChip } from '../features/transcribe/ModelIndicator';
 import { RecordingPill } from './RecordingPill';
+import { LiveDraw } from '../features/screen/LiveDraw';
 import { navigate, type Route } from './router';
 import { useOnline } from './useOnline';
 
@@ -140,6 +141,7 @@ export function Layout({ route, children }: { route: Route; children: ReactNode 
       </div>
 
       <RecordingPill visible={route.name !== 'home'} />
+      <LiveDraw />
       <DropToImport />
       {settingsLoaded ? (
         <Suspense fallback={null}>

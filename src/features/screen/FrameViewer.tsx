@@ -1,47 +1,27 @@
-import { useCallback, useEffect, useRef, useState, type PointerEvent } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { useToast } from '../../design/components/useToast';
 import {
   ArrowLeftIcon,
   ArrowRightIcon,
-  ArrowUpRightIcon,
   CopyIcon,
   DownloadSimpleIcon,
-  HighlighterIcon,
   PauseIcon,
-  PencilSimpleIcon,
   PlayIcon,
   TextTIcon,
-  SelectionSlashIcon,
-  SquareIcon,
   TrashIcon,
-  UndoIcon,
   XIcon,
-  type Icon,
 } from '../../design/icons';
 import { formatDuration } from '../../lib/format';
-import type { Frame, Stroke } from '../../storage/db';
-import { deleteFrame, restoreFrame, setFrameStrokes } from '../../storage/frames';
+import type { Frame } from '../../storage/db';
+import { deleteFrame, restoreFrame } from '../../storage/frames';
 import { downloadBlob } from '../notes/exportNote';
 import type { AudioPlayer } from '../notes/useAudioPlayer';
 import type { Segment } from '../transcribe/protocol';
-import { INK, TOOLS, flattenFrame, isNegligible, thin, type Tool } from './annotation';
-import { StrokeLayer } from './FrameImage';
+import { flattenFrame } from './annotation';
+import { DrawSurface, DrawToolbar, ViewerButton } from './drawing';
+import { useDrawing } from './useDrawing';
 import { frameDuring, pairSpeech, playFrom, segmentAt } from './timeline';
-
-const TOOL_ICON: Record<Tool, Icon> = {
-  pen: PencilSimpleIcon,
-  highlighter: HighlighterIcon,
-  arrow: ArrowUpRightIcon,
-  box: SquareIcon,
-};
-
-const TOOL_HINT: Record<Tool, string> = {
-  pen: 'Draw freehand',
-  highlighter: 'Highlight text or an area',
-  arrow: 'Point at something',
-  box: 'Frame an area',
-};
 
 const FOCUSABLE = 'button:not([disabled]), [href], [tabindex]:not([tabindex="-1"])';
 
@@ -68,21 +48,9 @@ export function FrameViewer({
 }) {
   const toast = useToast();
   const frame = frames[index]!;
-  const [tool, setTool] = useState<Tool>('arrow');
-  const [color, setColor] = useState<string>(INK[0].value);
-  const [strokes, setStrokes] = useState<Stroke[]>(frame.strokes);
-  const [draft, setDraft] = useState<Stroke | null>(null);
+  const drawing = useDrawing(frame);
   const [showText, setShowText] = useState(false);
   const panelRef = useRef<HTMLDivElement>(null);
-  const surfaceRef = useRef<HTMLDivElement>(null);
-
-  // Another frame was opened: show its drawing.
-  const [shownId, setShownId] = useState(frame.id);
-  if (shownId !== frame.id) {
-    setShownId(frame.id);
-    setStrokes(frame.strokes);
-    setDraft(null);
-  }
 
   const spoken = pairSpeech(frames, segments)[index]?.segments ?? [];
   const playing = player?.playing ?? false;
@@ -92,23 +60,8 @@ export function FrameViewer({
   // Replay: while the audio plays, show the frame that was on screen at that moment.
   const following = playing ? frameDuring(frames, now) : -1;
   useEffect(() => {
-    if (following >= 0 && following !== index && !draft) onIndex(following);
-  }, [following, index, draft, onIndex]);
-
-  const save = useCallback(
-    (next: Stroke[]) => {
-      setStrokes(next);
-      setFrameStrokes(frame.id, next).catch((error: unknown) => {
-        console.error('Could not save the drawing', error);
-        toast.show({ tone: 'error', message: 'Could not save the drawing.' });
-      });
-    },
-    [frame.id, toast],
-  );
-
-  const undo = useCallback(() => {
-    if (strokes.length > 0) save(strokes.slice(0, -1));
-  }, [strokes, save]);
+    if (following >= 0 && following !== index && !drawing.drawing) onIndex(following);
+  }, [following, index, drawing.drawing, onIndex]);
 
   const go = useCallback(
     (delta: number) => {
@@ -142,13 +95,7 @@ export function FrameViewer({
       togglePlay();
     } else if (event.key === 'ArrowRight') go(1);
     else if (event.key === 'ArrowLeft') go(-1);
-    else if ((event.metaKey || event.ctrlKey) && event.key.toLowerCase() === 'z') {
-      event.preventDefault();
-      undo();
-    } else if (!event.metaKey && !event.ctrlKey && !event.altKey) {
-      const match = TOOLS.find((entry) => entry.key === event.key);
-      if (match) setTool(match.tool);
-    }
+    else drawing.onKey(event);
     if (event.key === 'Tab' && panelRef.current) {
       const nodes = [...panelRef.current.querySelectorAll<HTMLElement>(FOCUSABLE)];
       const first = nodes[0];
@@ -164,42 +111,9 @@ export function FrameViewer({
     }
   }
 
-  function pointAt(event: PointerEvent): [number, number] {
-    const rect = surfaceRef.current!.getBoundingClientRect();
-    const clamp = (n: number) => Math.min(1, Math.max(0, n));
-    return [
-      clamp((event.clientX - rect.left) / rect.width),
-      clamp((event.clientY - rect.top) / rect.height),
-    ];
-  }
-
-  function onPointerDown(event: PointerEvent) {
-    if (event.button !== 0) return;
-    event.currentTarget.setPointerCapture(event.pointerId);
-    const point = pointAt(event);
-    setDraft({ id: crypto.randomUUID(), tool, color, points: [point, point] });
-  }
-
-  function onPointerMove(event: PointerEvent) {
-    if (!draft) return;
-    const point = pointAt(event);
-    setDraft(
-      draft.tool === 'pen' || draft.tool === 'highlighter'
-        ? { ...draft, points: [...draft.points, point] }
-        : { ...draft, points: [draft.points[0]!, point] },
-    );
-  }
-
-  function onPointerUp() {
-    if (!draft) return;
-    const done = { ...draft, points: thin(draft.points) };
-    setDraft(null);
-    if (!isNegligible(done)) save([...strokes, done]);
-  }
-
   async function copyImage() {
     try {
-      const blob = await flattenFrame({ ...frame, strokes });
+      const blob = await flattenFrame({ ...frame, strokes: drawing.strokes });
       const png = blob.type === 'image/png' ? blob : await toPng(blob);
       await navigator.clipboard.write([new ClipboardItem({ 'image/png': png })]);
       toast.show({
@@ -213,7 +127,7 @@ export function FrameViewer({
   }
 
   async function download() {
-    const blob = await flattenFrame({ ...frame, strokes });
+    const blob = await flattenFrame({ ...frame, strokes: drawing.strokes });
     const ext = blob.type === 'image/png' ? 'png' : blob.type === 'image/webp' ? 'webp' : 'jpg';
     downloadBlob(`frame-${String(index + 1).padStart(2, '0')}.${ext}`, blob);
   }
@@ -245,8 +159,6 @@ export function FrameViewer({
     if (player) player.seek(playFrom(frames[target]!));
     onIndex(target);
   }
-
-  const shown = draft ? [...strokes, draft] : strokes;
 
   return createPortal(
     <div
@@ -293,60 +205,7 @@ export function FrameViewer({
           />
           <ViewerButton label="Close" hint="Esc" icon={XIcon} onClick={onClose} tipAlign="end" />
         </div>
-        <div
-          role="toolbar"
-          aria-label="Drawing tools"
-          className="flex w-full items-center justify-start gap-1 overflow-x-auto sm:justify-center sm:overflow-visible"
-        >
-          {TOOLS.map((entry) => {
-            const ToolIcon = TOOL_ICON[entry.tool];
-            return (
-              <ViewerButton
-                key={entry.tool}
-                label={`${entry.label} (${entry.key})`}
-                hint={TOOL_HINT[entry.tool]}
-                icon={ToolIcon}
-                pressed={tool === entry.tool}
-                onClick={() => setTool(entry.tool)}
-              />
-            );
-          })}
-          <span className="mx-1 h-6 w-px bg-white/15" aria-hidden="true" />
-          <div role="radiogroup" aria-label="Ink colour" className="flex items-center gap-1">
-            {INK.map((ink) => (
-              <button
-                key={ink.value}
-                type="button"
-                role="radio"
-                aria-checked={color === ink.value}
-                aria-label={ink.name}
-                data-tip={ink.name}
-                onClick={() => setColor(ink.value)}
-                className="flex size-8 shrink-0 items-center justify-center rounded-full focus-visible:outline-2 focus-visible:outline-white"
-              >
-                <span
-                  className={`size-5 rounded-full border border-white/30 transition-transform ${color === ink.value ? 'scale-110 ring-2 ring-white ring-offset-2 ring-offset-[#0b0b0c]' : ''}`}
-                  style={{ background: ink.value }}
-                />
-              </button>
-            ))}
-          </div>
-          <span className="mx-1 h-6 w-px bg-white/15" aria-hidden="true" />
-          <ViewerButton
-            label="Undo"
-            hint="⌘Z / Ctrl+Z"
-            icon={UndoIcon}
-            onClick={undo}
-            disabled={strokes.length === 0}
-          />
-          <ViewerButton
-            label="Clear drawing"
-            hint="Removes every mark on this frame"
-            icon={SelectionSlashIcon}
-            onClick={() => save([])}
-            disabled={strokes.length === 0}
-          />
-        </div>
+        <DrawToolbar drawing={drawing} className="w-full justify-start sm:justify-center" />
       </header>
 
       <div className="relative flex min-h-0 flex-1 items-center justify-center px-12 py-2 sm:px-16">
@@ -359,24 +218,12 @@ export function FrameViewer({
           disabled={index === 0}
           className="absolute left-2 sm:left-3"
         />
-        <div
-          ref={surfaceRef}
-          data-testid="draw-surface"
-          className="relative max-h-full max-w-full touch-none cursor-crosshair overflow-hidden rounded-md shadow-2xl select-none"
-          style={{ aspectRatio: `${frame.width} / ${frame.height}`, height: 'min(100%, 100vw)' }}
-          onPointerDown={onPointerDown}
-          onPointerMove={onPointerMove}
-          onPointerUp={onPointerUp}
-          onPointerCancel={onPointerUp}
-        >
-          <img
-            src={urls.get(frame.id)}
-            alt={`Screen at ${formatDuration(frame.t * 1000)}`}
-            draggable={false}
-            className="absolute inset-0 size-full object-contain"
-          />
-          <StrokeLayer frame={frame} strokes={shown} />
-        </div>
+        <DrawSurface
+          frame={frame}
+          url={urls.get(frame.id)}
+          alt={`Screen at ${formatDuration(frame.t * 1000)}`}
+          drawing={drawing}
+        />
         {showText ? <ScreenTextPanel text={frame.text} onClose={() => setShowText(false)} /> : null}
         <ViewerButton
           label="Next frame"
@@ -424,45 +271,6 @@ export function FrameViewer({
       </footer>
     </div>,
     document.body,
-  );
-}
-
-function ViewerButton({
-  label,
-  hint,
-  icon: IconComponent,
-  onClick,
-  pressed,
-  disabled,
-  tipAlign,
-  tipSide,
-  className = '',
-}: {
-  label: string;
-  /** Second tooltip line: what it does, or its shortcut. */
-  hint?: string;
-  tipAlign?: 'start' | 'end';
-  tipSide?: 'top';
-  icon: Icon;
-  onClick(): void;
-  pressed?: boolean;
-  disabled?: boolean;
-  className?: string;
-}) {
-  return (
-    <button
-      type="button"
-      aria-label={label}
-      data-tip={hint ? `${label}\n${hint}` : label}
-      data-tip-align={tipAlign}
-      data-tip-side={tipSide}
-      aria-pressed={pressed}
-      onClick={onClick}
-      disabled={disabled}
-      className={`flex size-9 shrink-0 items-center justify-center rounded-full text-white/80 transition-colors hover:bg-white/10 hover:text-white focus-visible:outline-2 focus-visible:outline-white disabled:opacity-30 aria-pressed:bg-white aria-pressed:text-black ${className}`}
-    >
-      <IconComponent aria-hidden="true" weight="bold" className="size-[1.1rem]" />
-    </button>
   );
 }
 

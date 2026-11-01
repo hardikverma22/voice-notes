@@ -42,6 +42,8 @@ Loom made for agents, but nothing leaves your device.
   screen or mid-recording. Desktop Chrome, Edge and Firefox.
 - **Frames that pick themselves.** A frame is kept when the screen changes _and settles_, so a
   scroll is captured where it lands, not halfway. Press <kbd>S</kbd> to take one yourself.
+- **Draw while you talk.** While sharing, press <kbd>D</kbd> (or **Draw**) to freeze the screen
+  and mark it up on the spot. The recording keeps going, and Enter takes you back.
 - **Mark it up.** Open any frame full screen and draw on it with a pen, highlighter, arrow or
   box. Under the frame you see what you said while it was on screen. Copy the marked-up image,
   or download it.

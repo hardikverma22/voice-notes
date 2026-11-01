@@ -10,7 +10,7 @@ import {
   listOrphanSessions,
   replaceNoteAudio,
 } from '../../storage/audio';
-import type { Bookmark } from '../../storage/db';
+import type { Bookmark, Frame } from '../../storage/db';
 import { adoptSessionFrames, discardSessionFrames } from '../../storage/frames';
 import { createNote, getNote, setNoteAudio, startAppend } from '../../storage/notes';
 import { titleFromTranscript } from '../notes/title';
@@ -70,6 +70,7 @@ export function RecordingProvider({ children }: { children: ReactNode }) {
             : 'Could not share the screen.',
       }),
   });
+  const [drawingFrame, setDrawingFrame] = useState<Frame | null>(null);
   const screenRef = useRef(screen);
   useEffect(() => {
     screenRef.current = screen;
@@ -248,7 +249,17 @@ export function RecordingProvider({ children }: { children: ReactNode }) {
     if (pending) void discardSessionFrames(pending);
   }, [state]);
 
-  useSnapShortcut(screen.status === 'on', screen.snap);
+  useSnapShortcut(screen.status === 'on' && !drawingFrame, screen.snap, 'KeyS');
+
+  const drawNow = useCallback(async () => {
+    const frame = await screenRef.current.snap();
+    if (frame) setDrawingFrame(frame);
+  }, []);
+  useSnapShortcut(screen.status === 'on' && !drawingFrame, () => void drawNow(), 'KeyD');
+
+  // The recording ended: nothing left to draw on.
+  const recordingNow = state === 'recording' || state === 'paused';
+  if (!recordingNow && drawingFrame) setDrawingFrame(null);
 
   const startWithScreen = useCallback(async () => {
     if (state !== 'idle' && state !== 'error') return;
@@ -308,7 +319,10 @@ export function RecordingProvider({ children }: { children: ReactNode }) {
         void startScreen();
       },
       stopScreen: stopScreen,
-      snap: snapScreen,
+      snap: () => void snapScreen(),
+      drawNow: () => void drawNow(),
+      endDraw: () => setDrawingFrame(null),
+      drawingFrame,
       mark: () => {
         if (state !== 'recording' && state !== 'paused') return;
         marksRef.current.push(elapsedRef.current / 1000);
@@ -346,6 +360,8 @@ export function RecordingProvider({ children }: { children: ReactNode }) {
       stopScreen,
       snapScreen,
       resetScreen,
+      drawNow,
+      drawingFrame,
       startWithScreen,
       start,
       stop,
@@ -381,8 +397,8 @@ function useMarkShortcut(enabled: boolean, onMark: () => void) {
   }, [enabled]);
 }
 
-/** S takes a frame of the shared screen, unless the person is typing. */
-function useSnapShortcut(enabled: boolean, onSnap: () => void) {
+/** A one-key shortcut while sharing the screen (S: take a frame, D: draw), unless typing. */
+function useSnapShortcut(enabled: boolean, onSnap: () => void, code: string) {
   const callbackRef = useRef(onSnap);
   useEffect(() => {
     callbackRef.current = onSnap;
@@ -390,7 +406,7 @@ function useSnapShortcut(enabled: boolean, onSnap: () => void) {
   useEffect(() => {
     if (!enabled) return;
     const handler = (event: KeyboardEvent) => {
-      if (event.code !== 'KeyS' || event.repeat || event.metaKey || event.ctrlKey || event.altKey)
+      if (event.code !== code || event.repeat || event.metaKey || event.ctrlKey || event.altKey)
         return;
       const target = event.target as Element | null;
       if (target?.closest?.(TYPING_SELECTOR)) return;
@@ -399,7 +415,7 @@ function useSnapShortcut(enabled: boolean, onSnap: () => void) {
     };
     document.addEventListener('keydown', handler);
     return () => document.removeEventListener('keydown', handler);
-  }, [enabled]);
+  }, [enabled, code]);
 }
 
 /**

@@ -1,7 +1,6 @@
 import { AnimatePresence, m } from 'motion/react';
 import { useEffect, useRef } from 'react';
-import { Kbd } from '../../design/components/Kbd';
-import { CameraIcon, MonitorIcon, XIcon } from '../../design/icons';
+import { CameraIcon, MonitorIcon, PencilSimpleIcon, XIcon } from '../../design/icons';
 import { useRecording } from '../recorder/recordingContext';
 
 /**
@@ -67,13 +66,28 @@ export function ScreenControls({ disabled }: { disabled?: boolean }) {
             {frameCount} {frameCount === 1 ? 'frame' : 'frames'} kept
           </span>
           <span className="mt-0.5 hidden text-xs text-fg-muted sm:block">
-            Kept when the screen changes. Press <Kbd>S</Kbd> for one now.
+            Kept automatically as the screen changes.
           </span>
         </p>
         <button
           type="button"
+          onClick={rec.drawNow}
+          disabled={disabled}
+          aria-keyshortcuts="D"
+          data-tip={'Draw on the screen\nFreezes a frame to mark up while you keep talking · D'}
+          data-tip-side="top"
+          className="inline-flex min-h-10 shrink-0 items-center gap-1.5 rounded-full border border-border bg-surface px-3.5 text-sm font-medium shadow-sm transition-transform hover:bg-surface-2 active:scale-[0.96] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-focus disabled:opacity-45"
+        >
+          <PencilSimpleIcon aria-hidden="true" weight="bold" className="size-4" />
+          Draw
+        </button>
+        <button
+          type="button"
           onClick={rec.snap}
           disabled={disabled}
+          data-tip={'Take a frame\nKeeps what is on screen now · S'}
+          data-tip-side="top"
+          data-tip-align="end"
           aria-keyshortcuts="S"
           className="inline-flex min-h-10 shrink-0 items-center gap-1.5 rounded-full bg-accent px-4 text-sm font-medium text-accent-fg shadow-sm transition-transform active:scale-[0.96] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-focus disabled:opacity-45"
         >
