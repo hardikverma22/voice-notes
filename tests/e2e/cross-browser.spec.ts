@@ -28,9 +28,19 @@ test('home offers voice or voice + screen, and the record button follows the cho
   await expect(page.getByRole('button', { name: 'Start screen recording' })).toBeVisible();
 
   const results = await new AxeBuilder({ page }).withTags(['wcag2a', 'wcag2aa']).analyze();
-  expect(
-    results.violations.map((v) => `${v.id}: ${v.nodes.map((n) => n.target).join(', ')}`),
-  ).toEqual([]);
+  // Name each offending element by its text and the measured contrast, for a useful failure.
+  const found: string[] = [];
+  for (const violation of results.violations) {
+    for (const node of violation.nodes) {
+      const text = await page
+        .locator(String(node.target[0]))
+        .first()
+        .innerText()
+        .catch(() => '?');
+      found.push(`${violation.id}: "${text.trim().slice(0, 40)}" ${node.any[0]?.message ?? ''}`);
+    }
+  }
+  expect(found).toEqual([]);
 });
 
 test('tooltips show on hover after a short delay', async ({ page }) => {
