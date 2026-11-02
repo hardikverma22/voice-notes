@@ -30,6 +30,16 @@ describe('frameFileName', () => {
     expect(frameFileName(0, 3.9, 'webp')).toBe('frames/01-0m03s.webp');
     expect(frameFileName(11, 125, 'jpg')).toBe('frames/12-2m05s.jpg');
   });
+
+  it('pads to the frame count, so names sort in time order past 99 frames', () => {
+    const names = [10, 99, 100].map((i) => frameFileName(i, i * 4, 'webp', 300));
+    expect(names).toEqual([
+      'frames/011-0m40s.webp',
+      'frames/100-6m36s.webp',
+      'frames/101-6m40s.webp',
+    ]);
+    expect([...names].sort()).toEqual(names);
+  });
 });
 
 describe('report.md', () => {
@@ -112,6 +122,12 @@ describe('report.html', () => {
     );
     expect(html).toContain('src="data:image/webp;base64,AAA"');
     expect(html).toContain('<audio id="audio"');
+    expect(html).toContain('data-t="40.0">0:41</button>');
+  });
+
+  it('links the audio file next to the page when it was too big to inline', () => {
+    const html = buildReportHtml(input({ audio: { file: 'audio.webm' } }));
+    expect(html).toContain('<audio id="audio" controls preload="metadata" src="audio.webm">');
     expect(html).toContain('data-t="40.0">0:41</button>');
   });
 

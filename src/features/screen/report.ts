@@ -35,11 +35,15 @@ export interface ReportInput {
   audio?: { file: string; dataUrl?: string };
 }
 
-/** "frames/03-1m12s.webp": sorts in time order and tells the moment at a glance. */
-export function frameFileName(index: number, t: number, ext: string): string {
-  const total = Math.max(0, Math.floor(t));
-  const stamp = `${Math.floor(total / 60)}m${String(total % 60).padStart(2, '0')}s`;
-  return `frames/${String(index + 1).padStart(2, '0')}-${stamp}.${ext}`;
+/**
+ * "frames/03-1m12s.webp": tells the moment at a glance, and sorts in time order. The number is
+ * padded to the width of the frame count, so frame 100 sorts after frame 99.
+ */
+export function frameFileName(index: number, t: number, ext: string, count = 1): string {
+  const seconds = Math.max(0, Math.floor(t));
+  const stamp = `${Math.floor(seconds / 60)}m${String(seconds % 60).padStart(2, '0')}s`;
+  const width = Math.max(2, String(count).length);
+  return `frames/${String(index + 1).padStart(width, '0')}-${stamp}.${ext}`;
 }
 
 export function extensionForImage(mimeType: string): string {
@@ -174,7 +178,8 @@ function paragraphs(text: string): string {
  */
 export function buildReportHtml(input: ReportInput): string {
   const title = escapeHtml(input.title.trim() || 'Screen recording');
-  const audio = input.audio?.dataUrl;
+  // Inlined when small enough; otherwise the audio file next to report.html in the bundle.
+  const audio = input.audio ? (input.audio.dataUrl ?? input.audio.file) : undefined;
   const seek = (t: number) =>
     audio
       ? `<button class="t" type="button" data-t="${Math.max(0, t - 1).toFixed(1)}">${clock(t)}</button>`

@@ -16,6 +16,12 @@ import { pairSpeech } from './timeline';
 
 /** Audio larger than this is left out of report.html (it is still in the zip). */
 const MAX_INLINE_AUDIO_BYTES = 12_000_000;
+/**
+ * Frames are inlined into report.html (one file to send anywhere) while they add up to no more
+ * than this. Above it, the page links to the frames/ folder next to it, or a long recording
+ * would double the zip and make an HTML file too big to open comfortably.
+ */
+export const MAX_INLINE_IMAGE_BYTES = 20_000_000;
 
 export interface Bundle {
   blob: Blob;
@@ -34,20 +40,27 @@ export async function buildBundle(note: Note, noteMarkdown: string): Promise<Bun
   const files: Zippable = {};
 
   const reportFrames: ReportFrame[] = [];
+  const images: Blob[] = [];
   for (const [index, { frame, text }] of paired.entries()) {
     // Keep the capture's own format (WebP, or JPEG on Safari): small, and agents read both.
     const type = frame.mimeType === 'image/webp' ? 'image/webp' : 'image/jpeg';
     const image = await flattenFrame(frame, type);
-    const file = frameFileName(index, frame.t, extensionForImage(image.type));
+    const file = frameFileName(index, frame.t, extensionForImage(image.type), frames.length);
     files[file] = [new Uint8Array(await image.arrayBuffer()), { level: 0 }];
+    images.push(image);
     reportFrames.push({
       file,
       t: frame.t,
       marked: frame.strokes.length > 0,
       text,
       screenText: frame.text,
-      dataUrl: await toDataUrl(image),
     });
+  }
+
+  if (images.reduce((sum, image) => sum + image.size, 0) <= MAX_INLINE_IMAGE_BYTES) {
+    for (const [index, image] of images.entries()) {
+      reportFrames[index]!.dataUrl = await toDataUrl(image);
+    }
   }
 
   const audioRecord = note.audioId ? await getAudio(note.audioId) : undefined;
