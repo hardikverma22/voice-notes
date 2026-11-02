@@ -437,12 +437,15 @@ mark up and export on a phone.
   final transcription, reload persistence, delete with undo, crash recovery, search, autosave,
   export, and offline use. It also covers file import (and rejecting non-audio), tags and
   filtering, marked moments, record-more, the Tasks page, and search by meaning with related
-  notes. Speech fixtures need macOS `say`; those tests skip elsewhere. Screen recording runs
+  notes. The speech fixture comes from macOS `say`, or espeak-ng elsewhere; without either,
+  those tests skip. Screen recording runs
   against Chromium's fake display capture: auto and manual frames, drawing, undo, persistence,
   timeline ticks, and the exported zip's contents.
-- **CI** (GitHub Actions, every PR and push): `npm run verify`, plus the screen-recording,
-  OCR, home and smoke specs in Chromium and in Firefox (headed, in a virtual display, so it
-  can fake a shared screen). Specs that download the speech model run locally.
+- **CI** (GitHub Actions, every PR and push): `npm run verify`; the screen-recording, OCR,
+  home and smoke specs in Chromium and in Firefox (headed, in a virtual display, so it can
+  fake a shared screen); and the **full Chromium suite**, speech model included. Model
+  downloads are served from a disk cache (`tests/e2e/fixtures.ts`) kept between runs, and
+  the fake microphone speaks a sentence made with espeak-ng.
 - **Cross-browser:** `npm run test:e2e:cross` runs the screen-recording, OCR, home and smoke
   specs in Firefox (which can fake a mic and a shared screen), and the home and smoke specs in
   WebKit. Playwright's WebKit can't fake a shared screen or keep Blobs in IndexedDB, so screen
