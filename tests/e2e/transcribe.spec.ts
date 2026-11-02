@@ -14,13 +14,14 @@ test.describe('transcription', () => {
     await expect(page.getByRole('progressbar', { name: 'Speech model download' })).toBeVisible();
 
     const live = page.getByRole('region', { name: 'Live transcript' });
-    // Wait for the whole sentence, so stopping does not cut it short.
-    await expect(live).toContainText(/lazy dog/i, { timeout: 150_000 });
+    // Wait for the end of the sentence, so stopping does not cut it short. Match "dog" rather
+    // than "lazy dog": with synthetic speech (espeak-ng in CI) Whisper sometimes hears "razor".
+    await expect(live).toContainText(/\bdog\b/i, { timeout: 150_000 });
 
     await stopAndOpenNote(page);
     const editor = page.getByRole('textbox', { name: 'Note text' });
     await expect(editor).toContainText(/quick brown fox/i, { timeout: 120_000 });
-    await expect(editor).toContainText(/lazy dog/i);
+    await expect(editor).toContainText(/\bdog\b/i);
     await expect(page.getByRole('tab', { name: 'Timestamps' })).toBeVisible();
   });
 });
