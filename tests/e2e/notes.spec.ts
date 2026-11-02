@@ -1,8 +1,9 @@
-import { readFileSync } from 'node:fs';
+import { existsSync, readFileSync } from 'node:fs';
 import { expect, test } from './fixtures';
 import { ensureModelReady, noteMenu, sidebarNotes, stopAndOpenNote } from './helpers';
 
 test('record, reload, list, delete with undo, and permanent delete', async ({ page }) => {
+  test.skip(!existsSync('tests/fixtures/speech.wav'), 'needs speech.wav (macOS say or espeak-ng)');
   await page.goto('/');
   await ensureModelReady(page);
   await page.getByRole('button', { name: 'Start recording' }).click();
@@ -45,6 +46,7 @@ test('recovers audio from a recording interrupted by a reload', async ({ page })
 });
 
 test('search filters the library', async ({ page }) => {
+  test.skip(!existsSync('tests/fixtures/speech.wav'), 'needs speech.wav (macOS say or espeak-ng)');
   await page.goto('/');
   await ensureModelReady(page);
   await page.getByRole('button', { name: 'Start recording' }).click();

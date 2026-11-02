@@ -1,6 +1,7 @@
-// Writes tests/fixtures/tone.wav (pure JS) and, on macOS, tests/fixtures/speech.wav (built-in `say`).
+// Writes tests/fixtures/tone.wav (pure JS) and tests/fixtures/speech.wav: with the built-in `say`
+// on macOS, or with espeak-ng (converted by ffmpeg) elsewhere, such as CI.
 import { execFileSync } from 'node:child_process';
-import { mkdirSync, writeFileSync } from 'node:fs';
+import { mkdirSync, rmSync, writeFileSync } from 'node:fs';
 import { platform } from 'node:os';
 
 const FIXTURE_SENTENCE = 'The quick brown fox jumps over the lazy dog.';
@@ -44,6 +45,36 @@ if (platform() === 'darwin') {
     FIXTURE_SENTENCE,
   ]);
   console.log('wrote tests/fixtures/speech.wav and tone.wav');
+} else if (hasCommand('espeak-ng') && hasCommand('ffmpeg')) {
+  // Linux (CI): espeak-ng speaks at 22.05 kHz; convert to the 48 kHz mono 16-bit `say` makes.
+  execFileSync('espeak-ng', ['-s', '140', '-w', 'tests/fixtures/speech-raw.wav', FIXTURE_SENTENCE]);
+  execFileSync('ffmpeg', [
+    '-loglevel',
+    'error',
+    '-y',
+    '-i',
+    'tests/fixtures/speech-raw.wav',
+    '-ar',
+    '48000',
+    '-ac',
+    '1',
+    '-sample_fmt',
+    's16',
+    'tests/fixtures/speech.wav',
+  ]);
+  rmSync('tests/fixtures/speech-raw.wav');
+  console.log('wrote tests/fixtures/speech.wav (espeak-ng) and tone.wav');
 } else {
-  console.warn('Not macOS: only tone.wav written. Transcription e2e tests will skip.');
+  console.warn(
+    'No macOS `say` or espeak-ng + ffmpeg: only tone.wav written. Transcription e2e tests will skip.',
+  );
+}
+
+function hasCommand(name) {
+  try {
+    execFileSync('which', [name], { stdio: 'ignore' });
+    return true;
+  } catch {
+    return false;
+  }
 }

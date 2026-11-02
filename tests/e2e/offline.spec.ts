@@ -1,7 +1,9 @@
+import { existsSync } from 'node:fs';
 import { expect, test } from '@playwright/test';
 import { ensureModelReady, modelChip, sidebarNotes, stopAndOpenNote } from './helpers';
 
 test('works offline after the first run and reports installability', async ({ page, context }) => {
+  test.skip(!existsSync('tests/fixtures/speech.wav'), 'needs speech.wav (macOS say or espeak-ng)');
   await page.goto('/');
   await page.evaluate(() => navigator.serviceWorker.ready);
   await page.reload();

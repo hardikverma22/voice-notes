@@ -80,9 +80,10 @@ jobs:
           path: .cache/e2e-net
           key: e2e-net-${{ hashFiles('src/features/transcribe/config.ts', 'src/features/search/config.ts', 'package-lock.json') }}
           restore-keys: e2e-net-
+      # Spoken audio for the fake microphone (macOS uses `say`; here, espeak-ng).
+      - run: sudo apt-get install -y --no-install-recommends espeak-ng
       - run: node scripts/make-fixture.mjs
-      # Everything except the README screenshot generator. Specs that need spoken audio skip
-      # off macOS (the fixture is made with `say`).
+      # Everything except the README screenshot generator.
       - run: npx playwright test --project=chromium --grep-invert "README screenshots"
       - if: failure()
         uses: actions/upload-artifact@v4
