@@ -82,24 +82,34 @@ export async function renderVideo(
   if (sound) output.addAudioTrack(sound);
   await output.start();
 
+  // Scenes come in time order, so only the frame on screen is decoded: a 20-minute recording
+  // with hundreds of full-HD frames needs one frame's memory, not all of them at once.
+  const shown: { index: number; image: ImageBitmap | null } = { index: -1, image: null };
+  const imageFor = async (index: number): Promise<ImageBitmap> => {
+    if (shown.image && shown.index === index) return shown.image;
+    shown.image?.close();
+    shown.image = await createImageBitmap(await flattenFrame(frames[index]!));
+    shown.index = index;
+    return shown.image;
+  };
+
   try {
-    const images = await Promise.all(
-      frames.map(async (frame) => createImageBitmap(await flattenFrame(frame))),
-    );
     const scenes = planScenes(frames, note.segments, duration);
     const title = `${note.title || 'Screen recording'} · ${formatDate(note.createdAt)}`;
     const spoken = note.segments.filter((segment) => segment.text.trim());
     for (const [index, scene] of scenes.entries()) {
-      drawScene(ctx, scene, frames[scene.frame]!, images[scene.frame]!, spoken, title);
+      const image = await imageFor(scene.frame);
+      drawScene(ctx, scene, frames[scene.frame]!, image, spoken, title);
       await video.add(scene.start, scene.end - scene.start);
       onProgress(((index + 1) / scenes.length) * (sound ? 0.85 : 1));
     }
-    images.forEach((image) => image.close());
     if (sound && audio) await sound.add(audio);
     await output.finalize();
   } catch (error) {
     await output.cancel();
     throw error;
+  } finally {
+    shown.image?.close();
   }
   onProgress(1);
 
