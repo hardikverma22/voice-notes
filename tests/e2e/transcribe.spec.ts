@@ -22,6 +22,8 @@ test.describe('transcription', () => {
     const editor = page.getByRole('textbox', { name: 'Note text' });
     await expect(editor).toContainText(/quick brown fox/i, { timeout: 120_000 });
     await expect(editor).toContainText(/\bdog\b/i);
-    await expect(page.getByRole('tab', { name: 'Timestamps' })).toBeVisible();
+    // The editor shows the live draft first; the Timestamps tab appears once the final pass
+    // has saved its timestamped segments, which can take a while on a CI machine.
+    await expect(page.getByRole('tab', { name: 'Timestamps' })).toBeVisible({ timeout: 120_000 });
   });
 });
