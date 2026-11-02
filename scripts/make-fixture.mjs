@@ -1,7 +1,7 @@
 // Writes tests/fixtures/tone.wav (pure JS) and tests/fixtures/speech.wav: with the built-in `say`
 // on macOS, or with espeak-ng (converted by ffmpeg) elsewhere, such as CI.
 import { execFileSync } from 'node:child_process';
-import { mkdirSync, rmSync, writeFileSync } from 'node:fs';
+import { mkdirSync, writeFileSync } from 'node:fs';
 import { platform } from 'node:os';
 
 const FIXTURE_SENTENCE = 'The quick brown fox jumps over the lazy dog.';
@@ -45,29 +45,52 @@ if (platform() === 'darwin') {
     FIXTURE_SENTENCE,
   ]);
   console.log('wrote tests/fixtures/speech.wav and tone.wav');
-} else if (hasCommand('espeak-ng') && hasCommand('ffmpeg')) {
-  // Linux (CI): espeak-ng speaks at 22.05 kHz; convert to the 48 kHz mono 16-bit `say` makes.
-  execFileSync('espeak-ng', ['-s', '140', '-w', 'tests/fixtures/speech-raw.wav', FIXTURE_SENTENCE]);
-  execFileSync('ffmpeg', [
-    '-loglevel',
-    'error',
-    '-y',
-    '-i',
-    'tests/fixtures/speech-raw.wav',
-    '-ar',
-    '48000',
-    '-ac',
-    '1',
-    '-sample_fmt',
-    's16',
-    'tests/fixtures/speech.wav',
-  ]);
-  rmSync('tests/fixtures/speech-raw.wav');
+} else if (hasCommand('espeak-ng')) {
+  // Linux (CI): espeak-ng speaks 16-bit mono at its own rate (22.05 kHz); resample to the 48 kHz
+  // that `say` makes.
+  const raw = execFileSync('espeak-ng', ['-s', '140', '--stdout', FIXTURE_SENTENCE]);
+  const { samples, sampleRate } = readWav(raw);
+  writeWav('tests/fixtures/speech.wav', resample(samples, sampleRate, rate), rate);
   console.log('wrote tests/fixtures/speech.wav (espeak-ng) and tone.wav');
 } else {
   console.warn(
-    'No macOS `say` or espeak-ng + ffmpeg: only tone.wav written. Transcription e2e tests will skip.',
+    'No macOS `say` or espeak-ng: only tone.wav written. Transcription e2e tests will skip.',
   );
+}
+
+/** 16-bit PCM mono WAV to samples in -1..1. Walks the chunks, so extra chunks are fine. */
+function readWav(buffer) {
+  let offset = 12;
+  let sampleRate = 0;
+  while (offset + 8 <= buffer.length) {
+    const id = buffer.toString('ascii', offset, offset + 4);
+    // espeak-ng --stdout writes 0x7fffffff sizes; the data runs to the end of the buffer.
+    let size = buffer.readUInt32LE(offset + 4);
+    if (id === 'fmt ') sampleRate = buffer.readUInt32LE(offset + 12);
+    if (id === 'data') {
+      size = Math.min(size, buffer.length - offset - 8);
+      const samples = new Float32Array(Math.floor(size / 2));
+      for (let i = 0; i < samples.length; i++) {
+        samples[i] = buffer.readInt16LE(offset + 8 + i * 2) / 0x8000;
+      }
+      return { samples, sampleRate };
+    }
+    offset += 8 + size + (size % 2);
+  }
+  throw new Error('No audio data in the WAV from espeak-ng');
+}
+
+/** Linear resampling; fine for a test fixture. */
+function resample(samples, from, to) {
+  const out = new Float32Array(Math.round((samples.length * to) / from));
+  for (let i = 0; i < out.length; i++) {
+    const x = (i * from) / to;
+    const j = Math.floor(x);
+    const a = samples[j] ?? 0;
+    const b = samples[j + 1] ?? a;
+    out[i] = a + (b - a) * (x - j);
+  }
+  return out;
 }
 
 function hasCommand(name) {
