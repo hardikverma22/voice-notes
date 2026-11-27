@@ -70,5 +70,8 @@ export {
   SelectionSlashIcon,
   TranslateIcon,
   HardDrivesIcon,
+  SpeakerHighIcon,
+  SkipBackIcon,
+  SkipForwardIcon,
 } from '@phosphor-icons/react';
 export type { Icon } from '@phosphor-icons/react';

@@ -13,3 +13,6 @@ design-system
 .agents/
 .taste-skill/
 skills-lock.json
+
+# Third-party code kept exactly as upstream wrote it
+src/vendor/

@@ -1,4 +1,5 @@
 import { EMBED_MODEL_ID } from '../search/config';
+import { TTS_MODEL_ID } from '../speak/config';
 import { ACCURATE_MODEL_ID, MODEL_ID } from './config';
 
 /**
@@ -21,6 +22,7 @@ const KNOWN: Record<string, { name: string; purpose: string }> = {
   [MODEL_ID]: { name: 'Speech · Fast', purpose: 'Live and final transcripts' },
   [ACCURATE_MODEL_ID]: { name: 'Speech · Accurate', purpose: 'Final transcripts in Accurate mode' },
   [EMBED_MODEL_ID]: { name: 'Search', purpose: 'Search by meaning and related notes' },
+  [TTS_MODEL_ID]: { name: 'Voice', purpose: 'Reading notes aloud' },
 };
 const RUNTIME = 'runtime';
 
