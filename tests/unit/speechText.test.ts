@@ -65,6 +65,21 @@ describe('splitSentences', () => {
     ]);
   });
 
+  it('ends a sentence after "no." and a lowercase letter', () => {
+    expect(splitSentences('The answer is no. Then we left. Take plan a. Go.')).toEqual([
+      'The answer is no.',
+      'Then we left.',
+      'Take plan a.',
+      'Go.',
+    ]);
+  });
+
+  it('uses no lookbehind, which Safari before 16.4 cannot parse', async () => {
+    const { readFileSync } = await import('node:fs');
+    const source = readFileSync('src/features/speak/speechText.ts', 'utf8');
+    expect(source).not.toMatch(/\(\?<[=!]/);
+  });
+
   it('drops pieces with no letters or digits', () => {
     expect(splitSentences('Hi. ... !!')).toEqual(['Hi. ... !!']);
     expect(splitSentences('   ')).toEqual([]);

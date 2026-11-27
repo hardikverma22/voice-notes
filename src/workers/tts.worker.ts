@@ -12,10 +12,19 @@ function post(message: FromTtsWorker, transfer: Transferable[] = []): void {
   self.postMessage(message, { transfer });
 }
 
+/** Cache Storage, or null where the browser refuses it (Firefox private windows). */
+async function openCache(): Promise<Cache | null> {
+  try {
+    return typeof caches === 'undefined' ? null : await caches.open(TTS_CACHE);
+  } catch {
+    return null;
+  }
+}
+
 /** The model file from Cache Storage, or downloaded (with progress) and then cached. */
-async function modelBytes(): Promise<ArrayBuffer> {
-  const cache = typeof caches === 'undefined' ? null : await caches.open(TTS_CACHE);
-  const hit = await cache?.match(TTS_MODEL_URL);
+async function modelBytes(useCache: boolean): Promise<ArrayBuffer> {
+  const cache = await openCache();
+  const hit = useCache ? await cache?.match(TTS_MODEL_URL).catch(() => undefined) : undefined;
   if (hit) return hit.arrayBuffer();
 
   const response = await fetch(TTS_MODEL_URL);
@@ -62,11 +71,20 @@ let enginePromise: Promise<Engine> | null = null;
 function engine(): Promise<Engine> {
   if (!enginePromise) {
     enginePromise = (async () => {
-      const file = readGGUF(await modelBytes());
-      const voca = new TinyVoca(file);
-      const phonemizer = await fromGGUF(file);
-      post({ type: 'ready', sampleRate: voca.config.sample_rate });
-      return { voca, phonemizer };
+      const build = async (useCache: boolean): Promise<Engine> => {
+        const file = readGGUF(await modelBytes(useCache));
+        return { voca: new TinyVoca(file), phonemizer: await fromGGUF(file) };
+      };
+      let built: Engine;
+      try {
+        built = await build(true);
+      } catch {
+        // A damaged cached copy would fail on every visit: drop it and download once more.
+        await (await openCache())?.delete(TTS_MODEL_URL).catch(() => false);
+        built = await build(false);
+      }
+      post({ type: 'ready', sampleRate: built.voca.config.sample_rate });
+      return built;
     })();
     enginePromise.catch(() => {
       enginePromise = null;

@@ -8,8 +8,11 @@
  * so the player can show what is being read.
  */
 
-const ABBREVIATIONS =
-  /(?:\b(?:mr|mrs|ms|dr|prof|sr|jr|st|vs|etc|no|inc|ltd|co|e\.g|i\.e|a\.m|p\.m)|\b[A-Z])\.$/i;
+// No lookbehind anywhere in this file: Safari before 16.4 can't parse it, and this module is
+// loaded with the note page.
+const ABBREVIATIONS = /\b(?:mr|mrs|ms|dr|prof|sr|jr|st|vs|etc|inc|ltd|co|e\.g|i\.e|a\.m|p\.m)\.$/i;
+/** An initial, as in "J. Doe". Capital only, so "plan a." still ends a sentence. */
+const INITIAL = /(?:^|\s)[A-Z]\.$/;
 const HAS_WORD = /[\p{L}\p{N}]/u;
 const ENDS_SENTENCE = /[.!?…]["'”’)\]»]*$/;
 const ENDS_CLAUSE = /[,;:]["'”’)\]»]*$/;
@@ -26,7 +29,7 @@ function cleanLine(line: string): string {
       .replace(/\bwww\.\S+/gi, 'link')
       // Markdown emphasis and code marks.
       // Only paired marks outside a word, so snake_case, 2*3 and ~5 are left alone.
-      .replace(/(?<![\p{L}\p{N}])(\*\*|__|~~|\*|_|`)(?=\S)(.+?)(?<=\S)\1(?![\p{L}\p{N}])/gu, '$2')
+      .replace(/(^|[^\p{L}\p{N}])(\*\*|__|~~|\*|_|`)(\S|\S.*?\S)\2(?![\p{L}\p{N}])/gu, '$1$3')
       // Emoji and pictographs, with their joiners and variation selectors.
       .replace(/\p{Extended_Pictographic}|\u200d|\ufe0f/gu, '')
       .replace(/\s+/g, ' ')
@@ -53,9 +56,11 @@ export function splitSentences(text: string): string[] {
   for (const piece of text
     .replace(/\s+/g, ' ')
     .trim()
-    .split(/(?<=[.!?…]["')\]”’]?)\s+(?=["'(“‘[]?[A-Z0-9])/)) {
+    // Spaces were collapsed above, so a line break is free to mark the cuts.
+    .replace(/([.!?…]["')\]”’]?)\s+(?=["'(“‘[]?[A-Z0-9])/g, '$1\n')
+    .split('\n')) {
     current = current ? `${current} ${piece}` : piece;
-    if (!ABBREVIATIONS.test(current)) {
+    if (!ABBREVIATIONS.test(current) && !INITIAL.test(current)) {
       parts.push(current);
       current = '';
     }
@@ -98,7 +103,7 @@ export function utterancesOf(sentence: string, phonemize: Phonemize, limit: numb
       throw error;
     }
     if (result.ids.length <= limit) return [result];
-    const pieces = text.split(/(?<=[,;:—])\s+/);
+    const pieces = text.replace(/([,;:—])\s+/g, '$1\n').split('\n');
     if (pieces.length > 1) return pieces.flatMap(fit);
     const words = text.split(' ');
     if (words.length < 2) return [];

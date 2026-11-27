@@ -86,7 +86,8 @@ export function ReadAloudPanel({ state, english }: { state: ReadAloudState; engl
             className={`mt-0.5 size-5 shrink-0 text-accent ${paused ? 'opacity-50' : ''}`}
           />
           <div className="min-w-0 flex-1">
-            <p className="tabular text-xs font-medium text-fg-muted" aria-live="polite">
+            {/* No live region: announcing every sentence would talk over the voice. */}
+            <p className="tabular text-xs font-medium text-fg-muted">
               {paused ? 'Paused · ' : state.waiting ? 'Preparing · ' : ''}
               Sentence {state.index + 1} of {state.count}
             </p>
