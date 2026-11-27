@@ -19,6 +19,8 @@ import {
   MicrophoneIcon,
   PushPinIcon,
   ShareNetworkIcon,
+  SpeakerHighIcon,
+  StopIcon,
   TrashIcon,
   WarningCircleIcon,
   WaveformIcon,
@@ -48,6 +50,14 @@ import NoteEditor, { type SaveStatus } from './NoteEditor';
 import { RecordMorePanel } from './RecordMorePanel';
 import { StatusBadge } from './StatusBadge';
 import { RelatedNotes } from '../search/RelatedNotes';
+import { ReadAloudPanel } from '../speak/ReadAloudPanel';
+import {
+  getReadAloudState,
+  readAloud,
+  renderNoteAudio,
+  stopReading,
+  useReadAloud,
+} from '../speak/readAloud';
 import { FramesStrip } from '../screen/FramesStrip';
 import { FrameViewer } from '../screen/FrameViewer';
 import { useFrameUrls } from '../screen/useFrameUrls';
@@ -130,6 +140,26 @@ function NoteView({ note, t }: { note: Note; t: number | null }) {
   const locked = note.status === 'queued' || note.status === 'transcribing';
   const recorderBusy = rec.state !== 'idle' && rec.state !== 'error';
   const recordingHere = recorderBusy && rec.targetNoteId === note.id;
+  const speech = useReadAloud();
+  const readingHere = speech.noteId === note.id && speech.status !== 'idle';
+  /** Progress while the spoken-audio file is being made, otherwise null. */
+  const [speechExport, setSpeechExport] = useState<{
+    fraction: number;
+    stage: 'download' | 'speech';
+  } | null>(null);
+
+  // Reading stops when you leave the note, and when a recording starts (the microphone would
+  // hear it).
+  const noteId = note.id;
+  useEffect(
+    () => () => {
+      if (getReadAloudState().noteId === noteId) stopReading();
+    },
+    [noteId],
+  );
+  useEffect(() => {
+    if (recorderBusy && getReadAloudState().noteId === noteId) stopReading();
+  }, [recorderBusy, noteId]);
 
   async function bookmarkNow() {
     const bookmark = await addBookmark(note.id, player.currentTime);
@@ -227,6 +257,35 @@ function NoteView({ note, t }: { note: Note; t: number | null }) {
     }
   }
 
+  function toggleReadAloud() {
+    if (readingHere) stopReading();
+    else readAloud(note.id, note.title, plainText());
+  }
+
+  async function exportSpokenAudio() {
+    if (speechExport !== null) return;
+    setSpeechExport({ fraction: 0, stage: 'speech' });
+    // A new toast replaces this one when the file is ready or fails.
+    toast.show({ message: 'Making the spoken audio on this device…', durationMs: 0 });
+    try {
+      const blob = await renderNoteAudio(note.title, plainText(), (fraction, stage) =>
+        setSpeechExport({ fraction, stage }),
+      );
+      downloadBlob(
+        fileNameFor(note.title, note.createdAt, 'wav').replace(/\.wav$/, '-spoken.wav'),
+        blob,
+      );
+      toast.show({ tone: 'success', message: 'Spoken audio saved.', durationMs: 3000 });
+    } catch (error) {
+      toast.show({
+        tone: 'error',
+        message: error instanceof Error ? error.message : 'Could not make the spoken audio.',
+      });
+    } finally {
+      setSpeechExport(null);
+    }
+  }
+
   function downloadAudio() {
     if (!audio) return;
     downloadBlob(fileNameFor(note.title, note.createdAt, extensionFor(audio.mimeType)), audio.blob);
@@ -259,6 +318,14 @@ function NoteView({ note, t }: { note: Note; t: number | null }) {
     ...(audio
       ? [{ label: 'Download audio', icon: DownloadSimpleIcon, onSelect: downloadAudio }]
       : []),
+    {
+      label:
+        speechExport === null
+          ? 'Download spoken audio (.wav)'
+          : `${speechExport.stage === 'download' ? 'Downloading the voice' : 'Making spoken audio'}… ${Math.round(speechExport.fraction * 100)}%`,
+      icon: SpeakerHighIcon,
+      onSelect: () => void exportSpokenAudio(),
+    },
     ...(audio && !locked
       ? [
           {
@@ -324,6 +391,15 @@ function NoteView({ note, t }: { note: Note; t: number | null }) {
             aria-pressed={note.pinned}
             onClick={() => void setPinned(note.id, !note.pinned)}
           />
+          <IconButton
+            icon={readingHere ? StopIcon : SpeakerHighIcon}
+            label={readingHere ? 'Stop reading' : 'Read aloud'}
+            hint={readingHere ? undefined : 'On this device, in English'}
+            active={readingHere}
+            aria-pressed={readingHere}
+            disabled={recorderBusy || locked}
+            onClick={toggleReadAloud}
+          />
           <IconButton icon={CopyIcon} label="Copy text" onClick={() => void copyText()} />
           <Menu
             items={menuItems}
@@ -363,6 +439,16 @@ function NoteView({ note, t }: { note: Note; t: number | null }) {
             />
 
             <StatusPanel note={note} onRetry={retranscribe} />
+
+            <AnimatePresence initial={false}>
+              {readingHere ? (
+                <ReadAloudPanel
+                  key="read-aloud"
+                  state={speech}
+                  english={note.language === 'english'}
+                />
+              ) : null}
+            </AnimatePresence>
 
             <AnimatePresence initial={false} mode="popLayout">
               {recordingHere ? (

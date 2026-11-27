@@ -21,6 +21,9 @@ import {
 } from '../design/icons';
 import { downloadBlob } from '../features/notes/exportNote';
 import { ModelProgressCard, ModelReadyLine } from '../features/transcribe/ModelIndicator';
+import { SPEEDS, VOICES, type Speed, type Voice } from '../features/speak/config';
+import { changeVoice } from '../features/speak/readAloud';
+import { useSpeechSettings } from '../features/speak/settings';
 import { EMBED_MODEL_ID } from '../features/search/config';
 import { ACCURATE_MODEL_ID, MODEL_ID } from '../features/transcribe/config';
 import {
@@ -65,6 +68,7 @@ export function SettingsDialog({ open, onClose }: { open: boolean; onClose: () =
         <AppearanceSection />
         <TranscriptionSection />
         <SearchSection />
+        <ReadAloudSection />
         <ScreenSection />
         <ModelsSection open={open} />
         <DataSection open={open} />
@@ -644,6 +648,32 @@ function DeveloperSection() {
         <Button size="sm" variant="ghost" onClick={() => void remove()}>
           Remove demo notes
         </Button>
+      </div>
+    </Section>
+  );
+}
+
+function ReadAloudSection() {
+  const settings = useSpeechSettings();
+  return (
+    <Section title="Read aloud">
+      <div className="flex flex-col gap-3">
+        <Segmented<Voice>
+          label="Voice"
+          value={settings.voice}
+          onChange={(voice) => changeVoice({ voice })}
+          options={VOICES}
+        />
+        <Segmented<string>
+          label="Reading speed"
+          value={String(settings.speed)}
+          onChange={(speed) => changeVoice({ speed: Number(speed) as Speed })}
+          options={SPEEDS.map((speed) => ({ value: String(speed), label: `${speed}×` }))}
+        />
+        <p className="text-sm text-fg-muted text-pretty">
+          Reads a note to you with tiny-voca, a small English voice that runs on this device.
+          Downloads about 8 MB the first time you press Read aloud on a note.
+        </p>
       </div>
     </Section>
   );

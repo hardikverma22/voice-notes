@@ -108,6 +108,12 @@ Loom made for agents, but nothing leaves your device.
 - Copy, share (Web Share API), export to **Markdown** or **plain text**, download the audio,
   re-transcribe, and delete with **Undo**.
 - **Text notes** too, for when you'd rather type.
+- **Read aloud** ✨ _new_: press the speaker on any note to hear it, read on your device by
+  [tiny-voca](https://github.com/n4ze3m/tiny-voca), an 8 MB English voice. It starts after the
+  first sentence, shows the sentence being read, and reads headings and list items as their own
+  sentences. Pause, skip a sentence, or switch between a female and a male voice and four speeds
+  as it reads; media keys and the lock screen work too. **Download spoken audio** saves the note
+  as a WAV file. Works offline once the voice is downloaded.
 
 **Bring your own recordings, in your own language**
 
@@ -494,6 +500,10 @@ Inspired by [addyosmani/say](https://github.com/addyosmani/say) (MIT). No code w
 idea of private, on-device dictation comes from it. Speech recognition is
 [OpenAI Whisper](https://github.com/openai/whisper), run in the browser by
 [Transformers.js](https://github.com/huggingface/transformers.js).
+
+Read aloud uses [tiny-voca](https://github.com/n4ze3m/tiny-voca) by n4ze3m (Apache 2.0): its
+plain-JavaScript model and phonemizer are vendored in `src/vendor/tiny-voca` with their license,
+and the weights download from Hugging Face on first use.
 
 ## License
 
